@@ -1,0 +1,49 @@
+[
+  {
+    "v": "2026-10-06",
+    "t": "Yeni görünüm: koyu ve açık tema, Profil sekmesi, antrenmanda sıradaki hareket",
+    "m": [
+      "Baştan yenilenen görünüm: yeni yazı tipi, koyu ve açık tema, büyük ve okunaklı sayılar.",
+      "Alt menü sadeleşti: Bugün, Program, Hareketler, Profil.",
+      "Profil'de haftalık antrenman grafiği, testler, kilo ve nabız; bütün ayarlar da burada.",
+      "Aralık sayacı (torba, ip, tabata) Profil › Aralık sayacı'nda; çalışırken Profil sekmesinde nokta yanar.",
+      "Antrenmanda 'Sırada' satırı bir sonraki hareketi gösterir; süreli hareketlerde halka sayaç.",
+      "Ara haftasını Profil › Ara haftası ve takvim'den geri alabilirsin."
+    ]
+  },
+  {
+    "v": "2026-10-04",
+    "t": "Yeni giriş soruları, antrenmanda alternatif, hatırlatma ve koyu tema",
+    "m": [
+      "Yeni giriş soruları: sağlık durumu, yaşadığın yer, aletlerin, günün saati. Eski cevabın varsa Gün'deki şeritten yalnız yenileri cevapla.",
+      "Aletler tek tek soruluyor, hiçbiri var sayılmıyor. Kilo düğmesi dambıllarına ve plakalarına göre artıyor.",
+      "Antrenmanda 'Alternatif': aletine uygun hareket, sadece bugün ya da kalıcı. Yaptığın set yanlışsa üstüne dokunup düzelt.",
+      "Hareketler arası bekleme yok: hazır olunca 'Hazırım' dersin.",
+      "İlerleme › Ayarlar'da antrenman hatırlatması ve tema (açık, koyu).",
+      "Daha sade görünüm. Kayıt yazılamazsa uyarır; yedek yüklemeyi bir kez geri alabilirsin."
+    ]
+  },
+  {
+    "v": "2026-10-01",
+    "t": "Akıllı kilo önerisi, daha büyük düğmeler ve seans sonu rekorları",
+    "m": [
+      "Kilo önerisi nedenini söylüyor: hedefin üstündeysen artırır, zorlandıysan aynı kiloda tutar, çok altında kaldıysan düşürür.",
+      "Antrenmanda ana düğme hep ekranın altında; bütün düğmeler terli elle rahat basılacak kadar büyük.",
+      "Seans sonunda geçen seferle kıyas ve yeni rekorlar.",
+      "Yanlışlıkla 1000 kg ya da 500 tekrar yazarsan önce sorar; sildiğin kaydı 5 saniye içinde geri alabilirsin.",
+      "Hareket değiştirirken önce aynı etkiyi veren seçenekler gelir.",
+      "İlerleme › Ayarlar › Gizlilik: verilerinin nerede durduğu."
+    ]
+  },
+  {
+    "v": "2026-09-29",
+    "t": "Telefona kurulum, güncelleme bildirimi ve yeni kayıt özellikleri",
+    "m": [
+      "Uygulamayı telefonuna kurabilirsin: ana ekrandan açılır, internetsiz çalışır.",
+      "Güncelleme gelince bildirim alabilirsin; İlerleme › Ayarlar'dan açıp kapatılır.",
+      "Program dışı antrenman ve aktivite kaydı: Gün ekranının altında.",
+      "Takvime aktarma: Program ekranında.",
+      "Hareket adlarının altında İngilizce adları var; internette aratırken kolaylık."
+    ]
+  }
+]

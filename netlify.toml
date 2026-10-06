@@ -1,0 +1,4 @@
+# Yayın: npx netlify-cli deploy --prod  (önce: node build.js)
+[build]
+  publish = "dist/web"
+  functions = "netlify/functions"

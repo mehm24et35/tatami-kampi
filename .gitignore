@@ -1,0 +1,31 @@
+node_modules/
+.netlify/
+dist/
+# gizli bildirim anahtarları (node bildirim.js kur)
+push.local.json
+# son bildirim gönderimi kilidi (node bildirim.js gonder)
+son-gonderim.json
+# Android imza anahtarı: GitHub'a GİRMEZ (Secrets'ta durur). Kaybolursa uygulama güncellenemez, yedeğini sakla.
+imza/
+*.local.json
+*.jks
+# kişisel ve iç çalışma dosyaları (depo herkese açık)
+personal/
+test/
+raporlar/
+build/
+bilgi/
+.claude/
+CLAUDE.md
+YOL_HARITASI.md
+YAYINLAMA.md
+*.xlsx
+# eski kişisel program hattı (src/data.js kişisel notlar içerir)
+src/data.js
+src/app.html
+src/build.js
+src/check.js
+src/print.html
+src/build_xlsx.py
+tools/generalize_tracker.py
+.playwright-mcp/

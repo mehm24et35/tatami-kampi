@@ -1,0 +1,6 @@
+{
+  "appId": "com.tatamikampi.app",
+  "appName": "Tatami Kampı",
+  "webDir": "dist/web",
+  "android": { "allowMixedContent": false }
+}

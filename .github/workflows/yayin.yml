@@ -1,0 +1,44 @@
+# Yeni sürüm: git tag v<N> && git push origin v<N>
+# → Android APK (GitHub Releases, sabit adres .../releases/latest/download/tatami-kampi.apk) + iPhone için PWA (GitHub Pages)
+name: Yayın
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency: yayin
+jobs:
+  derle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: node build.js
+        env: { TK_REL: "${{ github.ref_name }}", TK_REPO: "${{ github.repository }}" }
+      - run: npx cap sync android
+      - name: APK (aynı anahtarla imzalı; değişirse telefondaki uygulama güncellenemez)
+        env: { TK_KEYSTORE: "${{ runner.temp }}/tatami.jks", TK_KS_PASS: "${{ secrets.TK_KS_PASS }}", KS_B64: "${{ secrets.TK_KEYSTORE_B64 }}" }
+        run: |
+          echo "$KS_B64" | base64 -d > "$TK_KEYSTORE"
+          cd android && chmod +x gradlew && ./gradlew --no-daemon assembleRelease -PtkVersion="${GITHUB_REF_NAME#v}"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/tatami-kampi.apk"
+      - name: GitHub Releases
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          node -e "const n=require('./src/yenilikler.json')[0];console.log((n?n.m:[]).map(x=>'- '+x).join('\n')+'\n\n**Kurulum (Android):** tatami-kampi.apk dosyasını indir, aç, Yükle. Güncellemede aynısını yap; kayıtların yerinde kalır.')" > "$RUNNER_TEMP/notlar.md"
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/tatami-kampi.apk" --title "Tatami Kampı $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notlar.md"
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist/web }
+  pages:
+    needs: derle
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
