@@ -1,5 +1,17 @@
 [
   {
+    "v": "2026-10-07",
+    "t": "Yeni görünüm, Profil sekmesi ve daha hızlı ilerleyen kilo önerisi",
+    "m": [
+      "Baştan yenilenen görünüm: koyu ve açık tema, yeni yazı tipi, büyük ve okunaklı sayılar.",
+      "Alt menü: Bugün, Program, Hareketler, Profil. Grafikler, testler, kilo, nabız ve bütün ayarlar Profil'de; aralık sayacı Profil › Aralık sayacı'nda.",
+      "Antrenmanda 'Sırada' satırı bir sonraki hareketi gösterir; süreli hareketlerde halka sayaç.",
+      "Kilo önerisi: hedefin çok üstünde tekrar yaparsan bir sonraki seansta daha büyük adımla artar. Tahmini başlangıç kilosu çok hafifse ilk seansta artırabilirsin.",
+      "Kalıcı hareket değişikliğini anında 'Geri al' ile ya da Profil › Cevaplarım ve ekipman'dan geri alabilirsin.",
+      "Max tutuşta Bitir'i unutursan sayaç 10 dakikada durur ve süreyi sorar. Set sayıları artık ısınmayı saymaz."
+    ]
+  },
+  {
     "v": "2026-10-06",
     "t": "Yeni görünüm: koyu ve açık tema, Profil sekmesi, antrenmanda sıradaki hareket",
     "m": [

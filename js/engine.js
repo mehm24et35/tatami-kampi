@@ -3,7 +3,7 @@
 "use strict";
 const LIB = root.LIB || require("./lib.js");
 const EX = LIB.EX;
-const VERSION = 15; // değişince kayıtlı programlar cevaplardan yeniden üretilir
+const VERSION = 16; // değişince kayıtlı programlar cevaplardan yeniden üretilir
 
 const DAYS = [
   { k: "pzt", n: "Pazartesi", s: "Pzt" }, { k: "sal", n: "Salı", s: "Sal" }, { k: "car", n: "Çarşamba", s: "Çar" },
@@ -348,7 +348,7 @@ function prescribe(ex, kind, P, pi, ctx) {
     if (longRest(ex) && !light) r = Math.max(r, 120);
     if (ex.mx) p = p.map((v) => v.replace(/×(\d+)(?:-(\d+))?/, (m, a, b) => (+(b || a) > ex.mx ? "×" + ex.mx : m))); // tekrar tavanı başlangıç kilosundan önce (deadlift 2×12 değil 2×8 → %75)
     if (learning) { n = "Teknik öğrenme: boş bar ya da çok hafif yük, her sette 4+ tekrar yedekte; ağırlık ancak teknik düzgünse artar." + (n ? " " + n : ""); kg0 = P.barKg; } // boş bar (biliniyorsa)
-    else { kg0 = startKg(ex, P, p[0]); if (kg0) n = (n ? n + " " : "") + "Başlangıç ~" + kg0 + " kg."; }
+    else { kg0 = startKg(ex, P, p[0]); if (kg0) n = (n ? n + " " : "") + kgNote(ex, P, kg0); }
     if (P.bp && (kind === "main" || kind === "sec")) n = (n ? n + " " : "") + "Nefesini tutma: kaldırırken ver, indirirken al.";
   } else if (t === "r") {
     if (["pullup", "chinup"].includes(ex.id)) { p = [["3 set × (max − 1)", "4 set × (max − 1)", "4 set × (max − 1)"], ["4 set × (max − 1)", "4 set × (max − 1)", "5 set × (max − 1)"], ["5 set × (max − 1)", "5 set × (max − 1)", "5 set × (max − 1)"]][k]; r = 120; n = "Sette 3'ten az çıkıyorsa kalan tekrarları negatif ya da bantla tamamla."; }
@@ -400,17 +400,27 @@ const KG0 = { squat: [0.15, 0.4, 0.8], hinge: [0.15, 0.5, 0.2], lunge: [0.08, 0.
   arm_flex: [0.06, 0.15, 0.1], arm_ext: [0.08, 0.12, 0.12], delt: [0.03, 0.05, 0.04], quad_iso: [0.08, 0.2, 0.25], calf: [0.1, 0.2, 0.5], carry: [0.2, 0.3, 0.3], grip: [0.05, 0.15, 0.1], rot: [0.06, 0.05, 0.08], upow: [0.06, 0.1, 0.1] };
 const LOWER = ["squat", "hinge", "lunge", "quad_iso", "calf"], PLATE = ["platefr", "wcalf", "woodchop"]; // PLATE: "barbell" kalemi burada tek plaka demek (bar kaldırılmaz)
 const down = (v, st, lo) => Math.max(lo, +(Math.floor(v / st + 1e-9) * st).toFixed(2));
+const careful = (P) => P.age >= 60 || P.age < 18 || P.cautious || !!P.postp; // 60+, 18 yaş altı, temkinli, doğum sonrası: daha hafif başla, yükleme gevşetilmez
+// Başlangıç kilosunun aleti, kütüphanedeki ilk uygun yük aletinden: "db" | "kb" | "bar" | "plate" | "mach" (yoksa null)
+function kgTool(ex, P) {
+  const alt = ex.eq.find((a) => a.some((k) => LOAD.has(k)) && a.every((k) => k === "none" || P.eq.has(k)));
+  return !alt ? null : alt.includes("barbell") ? (PLATE.includes(ex.id) || alt.includes("landmine") ? "plate" : "bar") : GYM_EQ.some((k) => alt.includes(k)) ? "mach" : alt.includes("db") ? "db" : alt.includes("kb") ? "kb" : null;
+}
+// Not: "Başlangıç ~X kg." 5RM yoksa kilo muhafazakâr bir tahmindir; deneyimli kişiye ilk seansta düzeltme yolu verilir, güçlü kişi haftalarca hafif kalmasın
+// (2026-10-07 raporu; varsayım, bilgi/antrenman-bilimi.md). Dikkatli gruplarda ve en ağır dambılda (artıracak kilo yok) bu cümle yok.
+function kgNote(ex, P, kg0) {
+  const m = RM_OF[ex.id], guess = !(m && P.rm[m[0]]), top = kgTool(ex, P) === "db" && P.dbMax;
+  return "Başlangıç ~" + kg0 + " kg" + (guess && P.liftL >= 2 && !careful(P) && !(top && kg0 >= top) ? " (tahmin; ilk set çok kolaysa sonraki sette artır)." : ".");
+}
 function guessKg(ex, P, rx) {
-  const alt = ex.eq.find((a) => a.some((k) => LOAD.has(k)) && a.every((k) => k === "none" || P.eq.has(k))); // kütüphanedeki ilk uygun alet
-  let pat = alt && ex.pat.find((q) => KG0[q]); if (!pat) return null;
-  const tool = alt.includes("barbell") ? (PLATE.includes(ex.id) || alt.includes("landmine") ? "plate" : "bar") : GYM_EQ.some((k) => alt.includes(k)) ? "mach" : alt.includes("db") ? "db" : alt.includes("kb") ? "kb" : null;
-  if (!tool) return null;
+  const tool = kgTool(ex, P);
+  let pat = tool && ex.pat.find((q) => KG0[q]); if (!pat) return null;
   if (ex.uni && (pat === "squat" || pat === "hinge")) pat = "lunge"; // tek bacak: hamle katsayısı
   const m = /×\s*(\d+)\s*(m\b|sn|dk)?/.exec(String(rx)), reps = m && !m[2] ? +m[1] : 10;
   let kg = Math.min(P.w, 25 * Math.pow(P.h / 100, 2)) * KG0[pat][tool === "db" || tool === "kb" ? 0 : tool === "mach" ? 2 : 1]
     * [1, 1.25, 1.5][P.liftL - 1] // seviye (ağırlık geçmişi yoksa 1)
     * (P.sex === "k" ? (LOWER.includes(pat) ? 0.85 : 0.7) : 1) // kadında vücut ağırlığına oranla üst vücut belirgin, alt vücut az düşük
-    * (P.age >= 60 || P.age < 18 || P.cautious || P.postp ? 0.8 : 1) // 60+, 18 yaş altı, temkinli, doğum sonrası: daha hafif başla
+    * (careful(P) ? 0.8 : 1)
     * (40 / 30) / (1 + reps / 30); // reçetenin tekrarına göre (Epley oranı; katsayılar ~10 tekrar için)
   if (ex.uni && tool !== "db" && tool !== "kb" && pat !== "delt") kg /= 2; // tek kol makine/kablo/köşe barı
   if (tool === "db") {
@@ -1077,7 +1087,7 @@ function generate(A, opts) {
     v: VERSION, created: new Date().toISOString().slice(0, 10),
     summary: { reasons: reasons(P, A, S), L: P.L, levelName: ["", "Başlangıç", "Orta", "İleri"][P.L], cautious: P.cautious, bmi: Math.round(P.bmi * 10) / 10, days: P.days, mins: P.mins, goals: P.goals, scheme: P.scheme, types: P.days.map((dk) => dayType[dk][0]),
       // Ağırlık önerisi için (src/tracker.html kgAdvice): en ağır dambıl (kg, bilinmiyorsa null), halter var mı, dambıl adımı / sabit çiftler listesi, bar ağırlığı ve adımı
-      dbMax: P.dbMax, bar: P.eq.has("barbell"), dbStep: P.dbStep, dbList: P.dbList.length ? P.dbList : null, barKg: P.barKg, barStep: P.barStep,
+      dbMax: P.dbMax, bar: P.eq.has("barbell"), dbStep: P.dbStep, dbList: P.dbList.length ? P.dbList : null, barKg: P.barKg, barStep: P.barStep, careful: careful(P),
       shortDays: Object.keys(P.short), eventWeek: P.evWeek },
     profile: { age: P.age, sex: P.sex, height: P.h, weight: P.w, goalWeight: P.goalW },
     DAYS: DAYS.map((d) => Object.assign({}, d, { train: P.days.includes(d.k) })),

@@ -330,7 +330,7 @@ const VIEW = {
     return '<h1 class="wz-h">Şu anki seviyen</h1><p class="wz-lead">En yakın aralığı seç; bilmiyorsan “Bilmiyorum” de. İlk hafta zaten ölçüp programı sonuçlarına göre güncelleyeceğiz.</p>' +
       tb("pushup") + (F.includes("tests.pullup") ? tb("pullup") : "") + tb("plank") + tb("run") +
       (F.includes("rm") ? '<div class="wz-field"><span>Biliyorsan 5 tekrar kiloların</span><small style="margin-top:-4px">5 tekrar kilosu: 5 kez üst üste kaldırabildiğin en ağır kilo. Bilmiyorsan boş bırak.</small><div class="wz-grid">' + rm("squat", "Squat (barla çömelme)") + rm("dl", "Deadlift (yerden kaldırış)") + rm("bench", "Bench press (sırtüstü itiş)") + "</div>" +
-        rmAsk(A).map((id) => '<div class="ask" role="alert"><span>' + RM_LBL[id] + " " + esc(A.rm[id]) + " kg mı? Gerçekçi aralık " + E.RM_MIN + "-" + E.RM_MAX[id] + ' kg.</span><button type="button" class="btn ghost sm" data-wz-rmfix="' + id + '">Düzelt</button><button type="button" class="btn sm" data-wz-rmok="' + id + '">Evet</button></div>').join("") +
+        rmAsk(A).map((id) => '<div class="ask" role="alert"><span>' + RM_LBL[id] + " " + esc(A.rm[id]) + " kg mı? Gerçekçi aralık " + E.RM_MIN + "-" + E.RM_MAX[id] + ' kg.</span><button type="button" class="btn sm" data-wz-rmfix="' + id + '">Düzelt</button><button type="button" class="btn ghost sm" data-wz-rmok="' + id + '">Evet</button></div>').join("") +
         "<small>İlk haftanın başlangıç kilolarını buna göre öneririm.</small></div>" : "");
   },
   ozet: () => {
@@ -343,7 +343,7 @@ const VIEW = {
       (gen.RULES.slice(0, 2).filter((r) => /Sağlık|ağrın|Hamilelik/.test(r.h)).map((r) => '<div class="wz-warn"><b>' + esc(r.h) + ":</b> " + esc(r.t) + "</div>").join("")) +
       (sm.reasons && sm.reasons.length ? '<div class="wz-field"><span>Neden böyle kurdum?</span><ul class="wz-list">' + sm.reasons.map((r) => "<li>" + esc(r) + "</li>").join("") + "</ul></div>" : "") +
       (+A.age < 18 ? '<div class="wz-warn"><b>18 yaşından küçüksün:</b> Ağırlık çalışmalarını bir yetişkin veya antrenör gözetiminde yap.</div>' : "") +
-      '<p class="wz-note">' + (editing === "q2" ? "Program gelecek Pazartesi'den itibaren yeni cevaplarınla kurulur; bu hafta ve kayıtların olduğu gibi kalır." : editing ? "Program hemen yenilenir; bu hafta yaptığın günler ve kayıtların olduğu gibi kalır." : "Başlangıç: " + esc(trDate(A.start, true)) + ".") + " Her şeyi sonradan Program → Cevapları düzenle'den değiştirebilirsin.</p>";
+      '<p class="wz-note">' + (editing === "q2" ? "Program gelecek Pazartesi'den itibaren yeni cevaplarınla kurulur; bu hafta ve kayıtların olduğu gibi kalır." : editing ? "Program hemen yenilenir; bu hafta yaptığın günler ve kayıtların olduğu gibi kalır." : "Başlangıç: " + esc(trDate(A.start, true)) + ".") + " Her şeyi sonradan Profil › Cevaplarım ve ekipman'dan değiştirebilirsin.</p>";
   },
 };
 
@@ -369,7 +369,12 @@ function curWeek(ans) {
 window.TK_START_CHANGED = (s) => { const a = load(KEY_ANS); if (a && a.start !== s) { a.start = s; save(KEY_ANS, a); } };
 // Yeni cevaplarla programı kur; fromWeek öncesi haftalar eski planla kalır. prev: eski slot→hareket haritası, hâlâ geçerli hareketler aynı slotta kalır (kayıt anahtarları bozulmaz)
 function rebuild(A2, fromWeek) {
-  const old = load(KEY_PLAN), oldA = load(KEY_ANS), gen = E.generate(A2, old ? { prev: E.prevOf(old) } : undefined);
+  const old = load(KEY_PLAN), oldA = load(KEY_ANS), prev = old ? E.prevOf(old) : null;
+  // Geri alınan kalıcı değişiklik (A.swap'tan çıkan eski → yeni): yeninin slotu eski harekete döner; yoksa motor geçerli olan yeniyi slotunda tutar.
+  // Yalnız önceksiz üretilen planın da eski hareketi koyduğu slotlar (yeni hareket planda zaten başka yerde varsa o slota dokunulmaz).
+  const back = prev && oldA ? Object.keys(oldA.swap || {}).filter((id) => !(A2.swap || {})[id]) : [];
+  if (back.length) { const fresh = E.prevOf(E.generate(A2)); back.forEach((id) => Object.keys(prev).forEach((k) => { if (prev[k] === oldA.swap[id] && fresh[k] === id) prev[k] = id; })); }
+  const gen = E.generate(A2, prev ? { prev } : undefined);
   if (old && old.S && oldA && oldA.start === A2.start && fromWeek > 0) {
     // Her sürüm [önceki sınır, until) haftalarını kapsar; fromWeek öncesi aynen kalır, sonrası yeni plana geçer
     const cut = Math.min(fromWeek, 13), hist = [];
@@ -400,19 +405,23 @@ function weekSwaps(days, oldSess, newSess, logs) {
 }
 // @hafta-bitis
 // Değişikliği kur (alet, hareket geri alma / kalıcı değiştirme, cevap düzenleme): yapılmış günler bozulmaz, değişiklik bugünden görünür.
-function rebuildNow(A2) {
+// drop: geri alınan kalıcı değişikliğin yerine gelen hareketi; bu haftanın kayıtsız günlerine yazılmış günlük ikamesi de kalkar, eski hareket bugünden döner.
+// ponytail: kişinin aynı hareketi o güne kendisi "sadece bugün" seçtiyse o da kalkar (ikame kimin yazdığını tutmuyor).
+function rebuildNow(A2, drop) {
   const ans = load(KEY_ANS), w = Math.max(0, curWeek(ans)), T = window.TK, data = T ? null : load(KEY_DATA) || { settings: {}, logs: {}, tests: {}, weights: {} };
   const st = T ? T.state : data, set = st.settings || {}, logs = st.logs || (st.logs = {});
   const days = DAYS.map((d, i) => ({ date: iso(window.TK_WEEK.dateOf(set.start || ans.start, w, set.pauses, i)), dk: d.k }));
-  const from = weekFrom(w, days, logs), gen = rebuild(A2, from);
-  if (!gen || from === w || w > 12) return gen;
-  const P2 = adapt(gen, A2), ph = phaseOf(w).key, sw = weekSwaps(days, (dk) => P2.session(w, dk), (dk) => (gen.S[ph] || {})[dk], logs);
-  Object.keys(sw).forEach((date) => {
-    const L = logs[date] || (logs[date] = { date, week: w, day: days.find((d) => d.date === date).dk, items: {}, rpe: null, note: "", home: false });
-    L.swap = Object.assign({}, L.swap, sw[date]);
-    if (T) T.Store.put("logs", date);
-  });
-  if (!T && Object.keys(sw).length) save(KEY_DATA, data);
+  const from = weekFrom(w, days, logs), gen = rebuild(A2, from), put = new Set();
+  if (!gen) return gen;
+  if (drop) days.forEach(({ date }) => { const L = logs[date], s = L && L.swap; if (!s) return; Object.keys(s).forEach((k) => { if (s[k].x === drop && !okSets((L.items || {})[k])) { delete s[k]; put.add(date); } }); if (!Object.keys(s).length) delete L.swap; });
+  if (from !== w && w <= 12) {
+    const P2 = adapt(gen, A2), ph = phaseOf(w).key, sw = weekSwaps(days, (dk) => P2.session(w, dk), (dk) => (gen.S[ph] || {})[dk], logs);
+    Object.keys(sw).forEach((date) => {
+      const L = logs[date] || (logs[date] = { date, week: w, day: days.find((d) => d.date === date).dk, items: {}, rpe: null, note: "", home: false });
+      L.swap = Object.assign({}, L.swap, sw[date]); put.add(date);
+    });
+  }
+  if (T) put.forEach((d) => T.Store.put("logs", d)); else if (put.size) save(KEY_DATA, data);
   return gen;
 }
 function finish() {
@@ -429,11 +438,11 @@ function finish() {
   try { localStorage.removeItem(KEY_ANS + "_draft"); sessionStorage.removeItem("tatami_view"); } catch (e) {}
   location.reload();
 }
-// mode: yok = ilk kurulum (yarım kalan taslak sürer) · "edit" = Cevapları düzenle · "q2" = Sorular yenilendi (yalnız cevaplanmamış alanı olan adımlar)
-function start(prev, mode) {
+// mode: yok = ilk kurulum (yarım kalan taslak sürer) · "edit" = Cevapları düzenle · "q2" = Sorular yenilendi (yalnız cevaplanmamış alanı olan adımlar). at: düzenlemede açılacak adım (Ekipman → "alet")
+function start(prev, mode, at) {
   A = merge(prev || load(KEY_ANS + "_draft"));
   if (!mode) A.qV = 2; // yeni sihirbazın taslağı: hiçbir soru önceden işaretli gelmez
-  editing = mode || false; VIS = wizardSteps(A, editing); step = 0;
+  editing = mode || false; VIS = wizardSteps(A, editing); step = Math.max(0, VIS.indexOf(at));
   document.querySelector(".nav") && (document.querySelector(".nav").hidden = true);
   render();
 }
@@ -496,7 +505,6 @@ document.addEventListener("change", (ev) => { if (A && ev.target.dataset && ev.t
 const GOALN = E.GOALS;
 const inArt = () => !!(window.TK_ARTIFACT || window.claude); // Claude bağlantısı: yazdırma ve dosya indirme yok
 const noPrint = () => inArt() || window.TK_NATIVE; // Android uygulamasında (WebView) yazdırma çalışmaz
-const printBtn = (cls) => (noPrint() ? "" :'<button class="btn ghost' + cls + '" data-pub="print">Programı yazdır</button>');
 // Alt sayfa (kapatma tracker.html'deki data-act="close" ile)
 const sheet = (label, body) => {
   const html = '<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(label) + '"><button class="iconbtn x" data-act="close" aria-label="Kapat">×</button>' + body + "</div></div>";
@@ -523,21 +531,31 @@ const privacy = () => sheet("Gizlilik", '<h2>Gizlilik</h2><ul style="margin-top:
   "Telefon değiştirirken önce Profil › Yedek ve kayıtlar › <b>Yedek al</b>, yeni telefonda yedeği yükle.",
   MED,
 ].filter(Boolean).map((x) => "<li>" + x + "</li>").join("") + "</ul>");
-// Program ekranı: "head" = başlığın altındaki tek satır özet; "more" = Daha fazla altındaki işler (cevaplar, yazdırma, çıkarılan hareketler)
+// Program ekranı: "head" = başlığın altındaki tek satır özet (cevaplar, yazdırma, değiştirilen hareketler Profil › Cevaplarım ve ekipman'da)
 window.TK_PROGRAM_EXTRA = (part) => {
-  const P = window.PLAN, sm = P.summary || {}, ans = load(KEY_ANS) || {};
-  if (part === "head") return '<p class="small muted" style="margin:0 0 16px"><b style="color:var(--ink);font-weight:600">' + esc(sm.levelName || "") + (sm.cautious ? " · temkinli" : "") + "</b> · " + (sm.days || []).length + " gün · " + esc(sm.mins) + " dk · Hedef: " +
-    esc((sm.goals || []).map((g) => GOALN[g]).join(", ")) + "</p>";
-  return '<div class="card">' + ((ans.avoid || []).length ? '<p class="small" style="margin:0 0 8px">Çıkardığın hareketler: ' + ans.avoid.map((id) => esc((LIB.EX[id] || {}).n || id) + ' <button class="backlink" style="margin:0;font-size:var(--fs-s)" data-pub="unavoid" data-v="' + esc(id) + '">geri al</button>').join(" · ") + "</p>" : "") +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-pub="edit">Cevapları düzenle</button>' + printBtn(" sm") + "</div></div>";
+  const P = window.PLAN, sm = P.summary || {};
+  return part === "head" ? '<p class="small muted" style="margin:0 0 16px"><b style="color:var(--ink);font-weight:600">' + esc(sm.levelName || "") + (sm.cautious ? " · temkinli" : "") + "</b> · " + (sm.days || []).length + " gün · " + esc(sm.mins) + " dk · Hedef: " +
+    esc((sm.goals || []).map((g) => GOALN[g]).join(", ")) + "</p>" : "";
 };
+// Ekipman özeti (Cevaplarım ve ekipman): eski alet cevabı sihirbazdaki gibi açılır (merge)
+function eqText(ans) {
+  const n = merge(ans).eq.map((k) => (LIB.EQUIPMENT.find((e) => e.k === k) || {}).n).filter(Boolean);
+  return !n.length ? "Aletsiz" : n.length > 4 ? n.slice(0, 4).join(", ") + " ve " + (n.length - 4) + " alet daha" : n.join(", ");
+}
 // Profil › Ayarlar alt sayfalarının web satırları (bilgi/tasarim.md › Ayar listesi): sol etiket + alt açıklama, sağda ›.
 // "answers": Cevaplarım ve ekipman · "backup": Yedek ve kayıtlar (üst) · "danger": aynı sayfanın altı, tehlikeli bölüm (kırmızı yalnız orada) · "app": Uygulama · "appsub": Uygulama satırının alt metni
 const srowAct = (lbl, attr, sub) => '<button class="srow" ' + attr + "><span>" + lbl + (sub ? "<small>" + sub + "</small>" : "") + '</span><i aria-hidden="true">›</i></button>';
 window.TK_SETTINGS_EXTRA = (part) => {
   if (part === "danger") return '<section class="slist bad"><h3 class="catlbl">Tehlikeli</h3><button class="srow" data-pub="wipe">Tüm verileri sil</button></section>';
-  if (part === "answers") return '<section class="slist">' + srowAct("Cevapları düzenle", 'data-pub="edit"', "Program hemen yenilenir; yaptığın günler ve kayıtların kalır") +
-    (noPrint() ? "" : srowAct("Programı yazdır", 'data-pub="print"')) + "</section>";
+  if (part === "answers") {
+    const ans = load(KEY_ANS) || {}, nm = (id) => esc((LIB.EX[id] || {}).n || id);
+    return '<section class="slist">' + srowAct("Cevapları düzenle", 'data-pub="edit"', "Program hemen yenilenir; yaptığın günler ve kayıtların kalır") +
+      srowAct("Ekipman", 'data-pub="editeq"', esc(eqText(ans))) + (noPrint() ? "" : srowAct("Programı yazdır", 'data-pub="print"')) + "</section>" +
+      // Kalıcı değiştirilen hareketler (Hareketler › Bu hareketi değiştir, Alternatif › Kalıcı): geri al
+      ((ans.avoid || []).length ? '<section class="slist"><h3 class="catlbl">Değiştirdiğin hareketler</h3>' + ans.avoid.map((id) => '<div class="srow"><span>' + nm(id) +
+        "<small>" + (ans.swap && ans.swap[id] ? "yerine " + nm(ans.swap[id]) : "programdan çıkarıldı") + '</small></span><button class="btn ghost sm" data-pub="unavoid" data-v="' + esc(id) + '">Geri al</button></div>').join("") +
+        '<p class="snote">Geri alınca hareket programa döner; yaptığın günler ve kayıtların değişmez.</p></section>' : "");
+  }
   if (part === "app") return appSettings();
   if (part === "appsub") return inArt() ? "Telefona kurulan sürüm" : "Kurulum, bildirim, hatırlatma, sürüm";
   const last = lsGet("tk_web_lastbackup"), lastT = last && window.TK ? window.TK.fmtDate(window.TK.parseISO(last)) : last;
@@ -617,11 +635,12 @@ function okPlan(p) {
 // Yedek metni → süzülmüş {answers, plan, data} ya da { err }. Saf: test/arayuz.test.mjs
 function parseBackup(text) {
   if (typeof text !== "string" || text.length > BK_MAX) return { err: "Yedek çok büyük (6 MB üstü); yüklenmedi." };
-  let j; try { j = JSON.parse(text); } catch (e) { j = null; }
-  const NOT = "Bu bir Tatami Kampı yedeği değil.";
-  if (!isObj(j) || j.app !== "tatami-kampi" || (j.v != null && typeof j.v !== "number")) return { err: NOT };
-  if (j.v > BK_V) return { err: "Bu yedek uygulamanın daha yeni bir sürümünden. Önce uygulamayı güncelle, sonra tekrar dene." };
-  if (!isObj(j.answers) || !isObj(j.plan)) return { err: NOT };
+  // Üç ayrı durum, ayrı çözüm: okunamayan (bozuk/yarım) metin, başka uygulamanın dosyası, yeni sürümün yedeği. Hiçbirinde bir şey yazılmaz.
+  let j; try { j = JSON.parse(text); } catch (e) { j = undefined; }
+  const BAD = "Yedek okunamadı: dosya bozuk ya da metin yarım kopyalanmış. Yedeği yeniden al ya da metnin tamamını yapıştır.";
+  if (j === undefined || (isObj(j) && j.app === "tatami-kampi" && ((j.v != null && typeof j.v !== "number") || !isObj(j.answers) || !isObj(j.plan)))) return { err: BAD };
+  if (!isObj(j) || j.app !== "tatami-kampi") return { err: "Bu dosya bir Tatami Kampı yedeği değil; başka bir uygulamanın dosyası olabilir. Profil › Yedek ve kayıtlar › Yedek al ile aldığın dosyayı seç." };
+  if (j.v > BK_V) return { err: "Bu yedek uygulamanın daha yeni bir sürümünden. Önce bu cihazdaki uygulamayı güncelle, sonra tekrar dene." };
   const a = cleanAnswers(j.answers), miss = [[a.age != null, "yaş"], [!!a.sex, "cinsiyet"], [(a.days || []).length >= 2, "günler"], [!!a.place, "antrenman yeri"], [!!a.start, "başlangıç tarihi"], [j.data == null || isObj(j.data), "kayıtlar"]].filter((x) => !x[0]).map((x) => x[1]);
   if (miss.length) return { err: "Bu yedek eksik ya da bozuk (" + miss.join(", ") + "). Hiçbir şeyi değiştirmedim." };
   let plan = j.plan, regen = false;
@@ -632,10 +651,18 @@ function parseBackup(text) {
   return { answers: a, plan, data: cleanData(j.data), saved: typeof j.saved === "string" ? j.saved.slice(0, 10) : "", regen };
 }
 let pendingRestore = null;
+// Antrenman günü: en az bir onaylı set ya da aktivite (tracker.html › trainedDay ile aynı kural)
+const trained = (L) => isObj(L) && ((Array.isArray(L.acts) && L.acts.length > 0) || Object.values(L.items || {}).some((I) => okSets(I) > 0));
+// Yükleme hatası kalıcı gösterilir: yapıştırma sayfası açıksa kutunun altında (yazmaya başlayınca kalkar), değilse ayrı sayfada
+function restoreErr(msg) {
+  const el = $("#pasteErr");
+  if (el) { el.textContent = msg; return; }
+  sheet("Yedek yüklenemedi", '<h2>Yedek yüklenemedi</h2><p role="alert">' + esc(msg) + '</p><p class="small muted">Bu cihazda hiçbir şey değişmedi.</p><div style="display:grid;gap:8px;margin-top:12px"><button class="btn ghost" data-act="close">Tamam</button></div>');
+}
 function restoreText(text) {
   const r = parseBackup(text);
-  if (r.err) { toast(r.err); return; }
-  const n = Object.keys(r.data.logs).length, m = Object.values(r.data.logs).reduce((x, L) => x + Object.keys(L.items || {}).length, 0), cur = load(KEY_DATA), nCur = cur && isObj(cur.logs) ? Object.keys(cur.logs).length : 0;
+  if (r.err) { restoreErr(r.err); return; }
+  const logs = Object.values(r.data.logs), n = logs.filter(trained).length, m = logs.reduce((x, L) => x + Object.values(L.items || {}).filter((I) => okSets(I) > 0).length, 0), cur = load(KEY_DATA), nCur = cur && isObj(cur.logs) ? Object.values(cur.logs).filter(trained).length : 0;
   pendingRestore = r;
   sheet("Yedeği yükle", "<h2>Yedeği yükle</h2><p>Yedekte <b>" + n + " gün</b> antrenman kaydı, başlangıç <b>" + esc(trDate(r.answers.start)) + "</b>, <b>" + m + "</b> hareket kaydı" + (r.saved ? " (alınma " + esc(trDate(r.saved)) + ")" : "") + "." + (r.regen ? " Yedekteki program okunamadı; cevaplardan yeniden kurulacak." : "") + "</p>" +
     "<p>Bu cihazdaki " + (nCur ? "<b>" + nCur + " günlük</b> kaydın" : "mevcut verinin") + " yerine geçecek. Yükledikten sonra Profil › Yedek ve kayıtlar'dan bir kez geri alabilirsin. Yüklensin mi?</p>" +
@@ -657,21 +684,30 @@ function restoreUndo() {
   const p = load(KEY_PREV); if (!p) { toast("Geri alınacak yükleme yok."); return; }
   const w = (k, v) => { if (v == null) { try { localStorage.removeItem(k); } catch (e) {} return true; } return save(k, v); };
   if (!(w(KEY_ANS, p.answers) && w(KEY_PLAN, p.plan) && w(KEY_DATA, p.data))) { toast("Geri alamadım; depolama dolu olabilir."); return; }
-  try { localStorage.removeItem(KEY_PREV); sessionStorage.removeItem("tatami_view"); } catch (e) {}
+  try { localStorage.removeItem(KEY_PREV); sessionStorage.removeItem("tatami_view"); sessionStorage.setItem("tk_restored", "undo"); } catch (e) {}
   location.reload();
 }
-function restore(file) { if (file.size > BK_MAX * 2) { toast("Yedek çok büyük (6 MB üstü); yüklenmedi."); return; } const r = new FileReader(); r.onload = () => restoreText(r.result); r.readAsText(file); }
+function restore(file) {
+  if (file.size > BK_MAX * 2) { restoreErr("Yedek çok büyük (6 MB üstü); yüklenmedi."); return; }
+  const r = new FileReader(); r.onload = () => restoreText(r.result); r.onerror = () => restoreErr("Dosya açılamadı. Tekrar dene ya da yedek metnini yapıştır."); r.readAsText(file);
+}
 document.addEventListener("click", (ev) => {
   const t = ev.target.closest("[data-pub]"); if (!t) return;
   const a = t.dataset.pub;
   if (a === "edit") { start(load(KEY_ANS), "edit"); return; }
+  if (a === "editeq") { start(load(KEY_ANS), "edit", "alet"); return; } // Cevaplarım ve ekipman › Ekipman: aynı düzenleme akışı, Aletler adımından
   if (a === "q2") { start(load(KEY_ANS), "q2"); return; } // Sorular yenilendi: yalnız cevaplanmamış alanı olan adımlar
   if (a === "q2later") { lsSet("tk_q2_later", iso(new Date())); rr(); return; }
   if (a === "hide") { try { sessionStorage.setItem(t.dataset.v, "1"); } catch (e) {} window.TK.render(); return; }
   if (a === "recal") { const r = recal(), ans = load(KEY_ANS); if (r && rebuild(r.A2, Math.max(0, curWeek(ans) + 1))) location.reload(); return; }
   if (a === "recalok") { const g = load(KEY_PLAN); g.calib = iso(new Date()); save(KEY_PLAN, g); window.TK.render(); return; }
   if (a === "cycle") return nextCycle();
-  if (a === "swapto") { if (swapPerm(t.dataset.old, t.dataset.v)) location.reload(); return; }
+  if (a === "swapto") { // Hareketler › Bu hareketi değiştir: sayfa yenilenmez; sonuç ve 5 sn "Geri al" bildirimde
+    const T = window.TK, old = t.dataset.old, nu = t.dataset.v, undo = window.TK_SWAP_PERM(old, nu); if (!undo) return;
+    T.closeSheet(); T.render();
+    T.toast("Programda " + LIB.EX[old].n + " yerine " + LIB.EX[nu].n, () => { if (undo()) T.render(); });
+    return;
+  }
   if (a === "eqcheck") { eqSel = null; eqSheet(); return; }
   if (a === "eqlater") { lsSet("tk_eq_later", iso(new Date())); eqSel = null; $("#sheetRoot").innerHTML = ""; rr(); return; }
   if (a === "eq") { // çip: yerinde değişir
@@ -688,14 +724,14 @@ document.addEventListener("click", (ev) => {
   if (a === "unavoid") {
     const ans = load(KEY_ANS), sw = Object.assign({}, ans.swap); delete sw[t.dataset.v];
     const A2 = Object.assign({}, ans, { avoid: (ans.avoid || []).filter((x) => x !== t.dataset.v), swap: sw });
-    if (rebuildNow(A2)) location.reload(); else toast("Kaydedemedim; depolama dolu olabilir."); return;
+    if (rebuildNow(A2, (ans.swap || {})[t.dataset.v])) location.reload(); else toast("Kaydedemedim; depolama dolu olabilir."); return;
   }
   if (a === "backup") return backup();
   if (a === "print") return printPlan();
   if (a === "privacy") return privacy();
   if (a === "paste") return sheet("Yedekten yükle", '<h2>Yedekten yükle</h2><p class="small muted">Sakladığın yedek metnini buraya yapıştır. Bu cihazdaki mevcut program ve kayıtların yerini alır.</p>' +
-    '<textarea id="pasteIn" style="min-height:150px;font-size:var(--fs-s)" placeholder="{&quot;app&quot;:&quot;tatami-kampi&quot;…"></textarea><button class="btn" style="width:100%;margin-top:10px;height:46px" data-pub="pastego">Yükle</button>');
-  if (a === "pastego") { const ta = $("#pasteIn"); if (ta && ta.value.trim()) restoreText(ta.value.trim()); return; }
+    '<textarea id="pasteIn" aria-describedby="pasteErr" style="min-height:150px;font-size:var(--fs-s)" placeholder="{&quot;app&quot;:&quot;tatami-kampi&quot;…"></textarea><p class="wz-err" id="pasteErr" role="alert"></p><button class="btn" style="width:100%;margin-top:4px;height:46px" data-pub="pastego">Yükle</button>');
+  if (a === "pastego") { const ta = $("#pasteIn"); if (ta && ta.value.trim()) restoreText(ta.value.trim()); else restoreErr("Önce yedek metnini kutuya yapıştır."); return; }
   if (a === "restorego") return restoreGo();
   if (a === "restoreundo") return restoreUndo();
   if (a === "wipe") {
@@ -716,6 +752,7 @@ document.addEventListener("click", (ev) => {
   }
 });
 document.addEventListener("change", (ev) => { if (ev.target.dataset && ev.target.dataset.pubFile && ev.target.files[0]) restore(ev.target.files[0]); });
+document.addEventListener("input", (ev) => { const e = ev.target.id === "pasteIn" && $("#pasteErr"); if (e) e.textContent = ""; }); // düzeltmeye başlayınca hata kalkar
 
 // ---------------- test sonuçlarıyla yeniden ayarlama ----------------
 const LV = ["", "Başlangıç", "Orta", "İleri"];
@@ -806,7 +843,7 @@ function wzInstall() {
     (APP.prompt ? '<div style="margin-top:8px"><button type="button" class="btn sm" data-pub="install">Yükle</button></div>'
       : isIOS() ? HOW_IOS + " Sonra uygulamayı ana ekrandan aç, sorulara orada başla. " + IOS_7 + " " + IOS_SEP : HOW_AND + " Sonra uygulamayı ana ekrandan aç.") + "</div>";
 }
-const HOW_AND = window.TK_REPO ? '<a href="https://github.com/' + window.TK_REPO + '/releases/latest/download/tatami-kampi.apk">Android uygulamasını indir</a>, inen dosyayı açıp kur (bir kereliğine "bilinmeyen kaynaklara izin ver" ister). İnternetsiz çalışır.'
+const HOW_AND = window.TK_REPO ? '<a href="https://github.com/' + window.TK_REPO + '/releases/latest/download/tatami-kampi.apk">Android uygulamasını indir</a>, inen dosyayı açıp kur (bir kereliğine "bilinmeyen kaynaklara izin ver" ister).'
   : "Tarayıcı menüsünden (⋮) <b>Uygulamayı yükle</b> ya da <b>Ana ekrana ekle</b>'yi seç.";
 const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 const siteLink = () => '<a href="' + esc(window.TK_SITE) + '" target="_blank" rel="noopener">' + esc(window.TK_SITE.replace(/^https?:\/\//, "").replace(/\/$/, "")) + "</a>";
@@ -833,7 +870,7 @@ function appStrips() {
   return out;
 }
 // ---- antrenman günü hatırlatması (gönderen: netlify/functions/hatirlat.mjs, saat başı) ----
-// Yerelde yalnız açık/kapalı (tk_remind) ve sunucuya son gönderilen kayıt (tk_remind_sent) durur. Saat = ayarlardaki calTime (Program › Takvime aktar ile ortak), günler programdan.
+// Yerelde yalnız açık/kapalı (tk_remind) ve sunucuya son gönderilen kayıt (tk_remind_sent) durur. Saat = ayarlardaki calTime (Profil › Ara haftası ve takvim › Takvime aktar ile ortak), günler programdan.
 const DAYN = { paz: 0, pzt: 1, sal: 2, car: 3, per: 4, cum: 5, cmt: 6 }, HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 05:00–22:00
 const remindOn = () => lsGet("tk_remind") === "1";
 const calHour = () => parseInt((((load(KEY_DATA) || {}).settings || {}).calTime) || "07:00", 10) || 0;
@@ -955,7 +992,7 @@ if (window.TK_NATIVE) { // dosyalar APK'nın içinde: service worker gerekmez; g
 window.TK_DAY_BANNER = () => {
   const ans = load(KEY_ANS); if (!ans) return "";
   const w = curWeek(ans), st = window.TK && window.TK.state, S = [];
-  if (BOOT_ERR && !hidden("tk_boot_no")) S.push(strip({ id: "boot", warn: true, h: "Program güncellenemedi", t: "<b>Program güncellenemedi</b> · eski planla devam", body: "<p>Motor güncellemesi cevaplarından yeni plan kuramadı; önceki planınla devam ediyorsun, kayıtların yerinde. Program › Cevapları düzenle › Programı güncelle ile tekrar deneyebilirsin.</p>", x: 'data-pub="hide" data-v="tk_boot_no"' }));
+  if (BOOT_ERR && !hidden("tk_boot_no")) S.push(strip({ id: "boot", warn: true, h: "Program güncellenemedi", t: "<b>Program güncellenemedi</b> · eski planla devam", body: "<p>Motor güncellemesi cevaplarından yeni plan kuramadı; önceki planınla devam ediyorsun, kayıtların yerinde. Profil › Cevaplarım ve ekipman › Cevapları düzenle › Programı güncelle ile tekrar deneyebilirsin.</p>", x: 'data-pub="hide" data-v="tk_boot_no"' }));
   if (w >= 12 && !hidden("tk_cycle_no")) {
     // 12. hafta son test haftası: testler girilmeden "Başlat" yok (Pazartesi tek dokunuşla test haftası atlanmasın)
     const ok = w > 12 || week12Tested(), hd = w > 12 ? "Program tamamlandı" : ok ? "Program bitiyor" : "Son hafta";
@@ -978,7 +1015,7 @@ window.TK_DAY_BANNER = () => {
     body: "<p>Giriş soruları derinleşti: sağlık durumu, yaşadığın yer, aletlerinin ayrıntısı, günün saati, kısa günler, hedef tarih… Yalnız yeni soruların olduğu adımlar gelir; mevcut cevapların korunur. Program gelecek Pazartesi'den itibaren güncellenir, bu hafta ve kayıtların olduğu gibi kalır.</p>",
     act: '<button class="btn sm" data-pub="q2">Cevapla</button>', x: 'data-pub="q2later"' }));
   // Yedek hatırlatması: 4 haftada bir; iPhone Safari'de haftada bir (7 gün kuralı)
-  const logs = st ? Object.keys(st.logs).length : 0, ios7 = isIOS() && !standalone(); let last = null; try { last = localStorage.getItem("tk_web_lastbackup"); } catch (e) {}
+  const logs = st ? Object.values(st.logs).filter(trained).length : 0, ios7 = isIOS() && !standalone(); let last = null; try { last = localStorage.getItem("tk_web_lastbackup"); } catch (e) {}
   if (logs >= 4 && (!last || (Date.now() - new Date(last + "T00:00:00")) / 864e5 > (ios7 ? 7 : 28)) && !hidden("tk_bk_no")) {
     const d = last ? esc(window.TK.fmtDate(window.TK.parseISO(last))) : "";
     S.push(strip({ id: "bk", h: "Yedek al", t: "<b>" + (last ? "Son yedek " + d : "Henüz yedek yok") + "</b> · veriler yalnız bu cihazda",
@@ -1012,13 +1049,28 @@ function swapPerm(old, nu) {
   const g = rebuildNow(A2); if (!g) toast("Kaydedemedim; depolama dolu olabilir.");
   return g;
 }
-// Antrenman sırasında sayfa yenilenmez: plan yerinde değiştirilir (tracker.html'deki P aynı nesne), çekirdek adımları yeniden kurar
-window.TK_SWAP_PERM = (old, nu) => { const g = swapPerm(old, nu); if (!g) return false; Object.keys(ALTM).forEach((k) => delete ALTM[k]); Object.assign(window.PLAN, adapt(g, load(KEY_ANS))); return true; };
+// Kalıcı değişikliğin 5 sn "Geri al"ı: önceki cevap, plan ve bu haftanın gün kayıtları (rebuildNow günlük ikame yazar, altPerm bugünü değiştirir) aynen geri yazılır
+function swapSnap() {
+  const T = window.TK, ans = load(KEY_ANS), set = T.state.settings, w = Math.max(0, curWeek(ans));
+  const days = DAYS.map((d, i) => iso(window.TK_WEEK.dateOf(set.start || ans.start, w, set.pauses, i)));
+  return { ans, plan: load(KEY_PLAN), logs: days.map((d) => [d, T.state.logs[d] && JSON.parse(JSON.stringify(T.state.logs[d]))]) };
+}
+const planNow = (g, a) => { Object.keys(ALTM).forEach((k) => delete ALTM[k]); Object.assign(window.PLAN, adapt(g, a)); };
+// Antrenman sırasında sayfa yenilenmez: plan yerinde değiştirilir (tracker.html'deki P aynı nesne), çekirdek adımları yeniden kurar. Döner: geri alma işlevi (true = geri alındı) ya da null
+window.TK_SWAP_PERM = (old, nu) => {
+  const s = swapSnap(), g = swapPerm(old, nu); if (!g) return null;
+  planNow(g, load(KEY_ANS));
+  return () => {
+    if (!save(KEY_ANS, s.ans) || !save(KEY_PLAN, s.plan)) { toast("Geri alamadım; depolama dolu olabilir."); return false; }
+    s.logs.forEach(([d, L]) => { if (L) window.TK.state.logs[d] = L; else delete window.TK.state.logs[d]; window.TK.Store.put("logs", d); });
+    planNow(s.plan, s.ans); return true;
+  };
+};
 // Hareket değiştirme: aynı kalıptan, aletine ve sakatlığına uygun seçenekler
 window.TK_SWAP = (id) => {
   const ans = load(KEY_ANS), P = E.profile(ans), ex = LIB.EX[id]; if (!ex) return;
   const alts = okAlts(id, P, { F2: 1, T: 1, F3: 2 }[phaseOf(Math.max(0, curWeek(ans))).key] || 0); // sıralama: bilgi/antrenman-bilimi.md › ikame; darbe sınırı bu haftanın fazına göre
-  sheet("Hareketi değiştir", '<div class="eyebrow">Değiştir</div><h2>' + esc(ex.n) + ' yerine</h2><p class="small muted" style="margin:6px 0 10px">Seçtiğin hareket bugünden itibaren programda bunun yerine gelir. Yaptığın günler ve kayıtların değişmez; istersen Program ekranından geri alırsın.</p>' +
+  sheet("Hareketi değiştir", '<div class="eyebrow">Değiştir</div><h2>' + esc(ex.n) + ' yerine</h2><p class="small muted" style="margin:6px 0 10px">Seçtiğin hareket bugünden itibaren programda bunun yerine gelir. Yaptığın günler ve kayıtların değişmez; istersen Profil › Cevaplarım ve ekipman\'dan geri alırsın.</p>' +
     (alts.length ? '<ul class="lib" style="border-top:1px solid var(--line)">' + alts.slice(0, 4).map((e) => '<li><button data-pub="swapto" data-v="' + e.id + '" data-old="' + id + '"><span><b>' + esc(e.n) + "</b><small>" + esc(e.en || "") + "</small></span></button></li>").join("") + "</ul>"
       : '<p>Aletlerine ve sakatlıklarına uygun başka bir seçenek bulamadım. Hareketi hafifletebilir ya da atlayabilirsin.</p>'));
 };
@@ -1126,6 +1178,6 @@ let started = false;
 const firstRun = () => { if (!window.PLAN && !started) { started = true; start(ans, false); } };
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", firstRun);
 else setTimeout(firstRun, 0);
-// Yedek yüklemesinden sonra: 5 sn "Geri al"
-setTimeout(() => { let r = false; try { r = sessionStorage.getItem("tk_restored") === "1"; sessionStorage.removeItem("tk_restored"); } catch (e) {} if (r && window.TK) window.TK.toast("Yedek yüklendi.", restoreUndo); }, 300);
+// Yedek yüklemesinden sonra: 5 sn "Geri al"; geri almadan sonra söylenir
+setTimeout(() => { let r = null; try { r = sessionStorage.getItem("tk_restored"); sessionStorage.removeItem("tk_restored"); } catch (e) {} if (r && window.TK) r === "undo" ? window.TK.toast("Son yedek yüklemesi geri alındı; önceki verilerin yerinde.") : window.TK.toast("Yedek yüklendi.", restoreUndo); }, 300);
 })();
