@@ -585,7 +585,8 @@ window.TK_SETTINGS_EXTRA = (part) => {
 
 // ---------------- yapay zekâyla program (biçim ve denetim: engine.js › aiCheck) ----------------
 // Kişi hazır metni kendi yapay zekâsına verir, konuşur, çıkan kodu yapıştırır. Bilgiler bize gelmez; uygulama biçimi, süreyi ve aletleri denetler.
-const aiRow = () => { const on = !!(load(KEY_ANS) || {}).ai; return '<section class="slist" style="margin:0 0 16px">' + srowAct(on ? "Yapay zekâ programın" : "Yapay zekânla kendi programını kur", 'data-pub="ai"', on ? "Güncelle ya da uygulamanın programına dön" : "ChatGPT, Gemini ya da Claude ile konuşarak") + "</section>"; };
+const aiRow = (m) => { const on = !!(load(KEY_ANS) || {}).ai; return '<section class="slist" style="margin:' + (m || "0 0 16px") + '">' + srowAct(on ? "Yapay zekâ programın" : "Yapay zekânla kendi programını kur", 'data-pub="ai"', on ? "Güncelle ya da uygulamanın programına dön" : "ChatGPT, Gemini ya da Claude ile konuşarak") + "</section>"; };
+window.TK_DAY_FOOT = () => aiRow("16px 0 0"); // Bugün ekranının en altında her gün sabit (Program başındakiyle aynı satır)
 const AI_EQ = { pullbar: "barfiks demiri", band: "direnç bandı", anchor: "bant bağlama yeri", rope: "atlama ipi", stairs: "merdiven", db: "dambıl", kb: "kettlebell", barbell: "halter", rack: "squat sehpası", bench: "düz sehpa", landmine: "landmine ya da köşe",
   cable: "kablo", latmach: "lat makinesi", lpmach: "leg press", legmach: "bacak bükme/açma makinesi", pressmach: "press makinesi", cardio: "kardiyo makinesi", rings: "halka/TRX", dip: "paralel bar", box: "kutu", bag: "boks torbası", medball: "sağlık topu", ladder: "koordinasyon merdiveni", outdoor: "açık alan" };
 const AI_L = { yil: { yok: "hiç ya da 3 aydan az", az: "3-12 ay", orta: "1-3 yıl", cok: "3 yıldan fazla" }, freq: { 0: "hiç", "1-2": "haftada 1-2 gün", "3-4": "haftada 3-4 gün", "5+": "haftada 5+ gün" },

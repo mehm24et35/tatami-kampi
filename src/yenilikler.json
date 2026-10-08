@@ -1,5 +1,13 @@
 [
   {
+    "v": "2026-10-08c",
+    "t": "Antrenman ekranı sadeleşti; yapay zekâyla program artık Bugün ekranında",
+    "m": [
+      "Antrenman sırasında ekranda yalnız hareket, tekrar ya da saniye var; tarif ve notlar altta \"Nasıl yapılır?\" sayfasında.",
+      "\"Yapay zekânla kendi programını kur\" artık Bugün ekranının en altında da her zaman duruyor."
+    ]
+  },
+  {
     "v": "2026-10-08b",
     "t": "Yeni: kendi yapay zekânla (ChatGPT, Gemini, Claude) sana özel program kur",
     "m": [
