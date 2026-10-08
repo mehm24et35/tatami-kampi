@@ -1,5 +1,14 @@
 [
   {
+    "v": "2026-10-08",
+    "t": "Hareket canlandırmaları, geri tuşu desteği ve adım adım ısınma",
+    "m": [
+      "175 harekette kısa canlandırma var: hareketin açıklamasında ve antrenman ekranında nasıl yapıldığını gösterir.",
+      "Telefonun geri tuşu ya da kenardan geri kaydırma artık uygulamayı kapatmaz; bir önceki ekrana döner. Bugün ekranında ikinci geri çıkar.",
+      "Isınma ve soğuma hareket hareket ilerler: her hareket ayrı ekranda, süreliyse sayaçla. Bitirince kaydedilir."
+    ]
+  },
+  {
     "v": "2026-10-07",
     "t": "Yeni görünüm, Profil sekmesi ve daha hızlı ilerleyen kilo önerisi",
     "m": [

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Canlandırma önizleme</title>
+<style>
+:root{--bg:#fff;--ink:#18181B;--line:#ECECEE}
+:root[data-theme="dark"]{--bg:#1E1F22;--ink:#F2F2F0;--line:#2E2F33}
+body{margin:0;padding:12px;background:var(--bg);color:var(--ink);font:14px system-ui}
+.row{border-bottom:1px solid var(--line);padding:8px 0}
+.row .an{width:140px;margin:0}
+.st{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
+</style>
+</head>
+<body>
+<p><button onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'':'dark'">Tema</button> ?id=… tek hareket</p>
+<div id="out"></div>
+<script src="../js/anim.js"></script>
+<script>
+// Geliştirme aracı: her hareket canlı + duruş kareleri (yayına girmez). Sunucu: .claude/launch.json › anim
+const only = new URLSearchParams(location.search).get("id"), W = new URLSearchParams(location.search).get("w");
+if (W) document.head.insertAdjacentHTML("beforeend", "<style>.row .an{width:" + W + "px}</style>");
+document.getElementById("out").innerHTML = TK_ANIM.ids().filter((id) => !only || only.split(",").includes(id)).map((id) => {
+  const n = +new URLSearchParams(location.search).get("n") || 6;
+  const st = Array.from({ length: n }, (_, i) => TK_ANIM.html(id, i / n)).join("");
+  return '<div class="row"><b>' + id + '</b><div class="st">' + TK_ANIM.html(id) + st + "</div></div>";
+}).join("");
+</script>
+</body>
+</html>

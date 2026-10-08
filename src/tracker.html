@@ -1949,11 +1949,12 @@ function vSayac() {
 }
 
 // ---------------- sheet (exercise details) ----------------
+const animOf = (id) => (window.TK_ANIM ? window.TK_ANIM.html(id) : ""); // hareket canlandırması (js/anim.js, yalnız web / Android); yoksa boş
 function openEx(id) {
   const e = P.EX[id]; if (!e) return;
   const li = (a) => (a || []).map((x) => "<li>" + esc(x) + "</li>").join("");
   const html = '<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(e.n) + '">' +
-    '<button class="iconbtn x" data-act="close" aria-label="Kapat">×</button><div class="eyebrow">' + esc(P.CATS[e.c]) + '</div><h2>' + esc(e.n) + '</h2><div class="en">' + esc(e.en) + "</div>" +
+    '<button class="iconbtn x" data-act="close" aria-label="Kapat">×</button><div class="eyebrow">' + esc(P.CATS[e.c]) + '</div><h2>' + esc(e.n) + '</h2><div class="en">' + esc(e.en) + "</div>" + animOf(id) +
     "<p style=\"margin:0\">" + esc(e.d) + "</p>" +
     "<h4>Nasıl yapılır</h4><ol>" + li(e.s) + "</ol>" +
     (e.i && e.i.length ? "<h4>İpuçları</h4><ul>" + li(e.i) + "</ul>" : "") +
@@ -2021,7 +2022,7 @@ function altPerm(k, id) {
 function altRefresh(id) {
   if ($("#player").hidden) return rerender();
   PL.steps = plBuild(PL.date);
-  const j = PL.steps.findIndex((s) => s.kind === "ex" && s.it.x === id), f = PL.steps.findIndex((s) => s.kind !== "end" && !plStepDone(s, plWi()));
+  const j = PL.steps.findIndex((s) => s.k && s.it.x === id), f = PL.steps.findIndex((s) => s.kind !== "end" && !plStepDone(s, plWi()));
   PL.i = j >= 0 ? j : f < 0 ? PL.steps.length - 1 : f; plReset();
 }
 function textSheet(name, data) {
@@ -2174,8 +2175,9 @@ document.addEventListener("click", (ev) => {
   if (act === "swap") { closeSheet(); if (window.TK_SWAP) window.TK_SWAP(v); return; }
   if (act === "alt") { altSheet(el.dataset.k); return; }
   if (act === "altpick") {
-    const k = el.dataset.k; if (!window.TK_SWAP_PERM) return altToday(k, v); // kişisel sürümde yalnız bugün; kalıcı değişiklik dosyadan
-    const nm = (x) => esc((P.EX[x] || {}).n || x), { it } = findItem(k), orig = planItem(k) || it;
+    const k = el.dataset.k, { c, it } = findItem(k), b = c.sess.blocks[+k.split("-")[0]];
+    if (!window.TK_SWAP_PERM || b.warm || /^(Isınma|Soğuma)/.test(b.name)) return altToday(k, v); // kişisel sürümde yalnız bugün (kalıcı değişiklik dosyadan); ısınma/soğuma da yalnız bugün: kalıcı ikame motorda yapıyı kaydırıyor
+    const nm = (x) => esc((P.EX[x] || {}).n || x), orig = planItem(k) || it;
     // İki seçenek kutusu (başlık + açıklama). Motorun uygun bulmadığı hareket listeye hiç girmez (TK_ALTS), bu yüzden ikisi de her zaman geçerli.
     sheetHTML("Alternatif", '<div class="eyebrow">Alternatif</div><h2>' + nm(v) + "</h2>" +
       '<div style="display:grid;gap:8px;margin-top:16px"><button class="opt" data-act="alttoday" data-k="' + k + '" data-v="' + esc(v) + '"><b>Sadece bugün</b><small>Program değişmez; bugünkü setler ' + nm(v) + " olarak kaydedilir.</small></button>" +
@@ -2354,7 +2356,7 @@ const PL = { date: null, steps: [], i: 0, mode: "step", draft: null, rest: null,
 const plWi = () => ctx(PL.date).ph.wi;
 const plSets = (it, wi) => (it.t === "x" ? xCount(it, wi) : Math.max(1, setsFor(it, wi)));
 function plIsList(b, items, wi) {
-  if (b.warm || b.circ || /^(Isınma|Soğuma)/.test(b.name) || /devre/i.test(b.name)) return true;
+  if (b.circ || /devre/i.test(b.name)) return true;
   return items.length > 1 && items.every(({ it }) => it.t === "x" && xCount(it, wi) <= 1 && !parseInterval(P.rx(it, wi), it));
 }
 function plBuild(date) {
@@ -2368,7 +2370,9 @@ function plBuild(date) {
       items = items.filter((x) => !simple.includes(x));
     }
     if (items.length) {
-      if (plIsList(b, items, wi)) steps.push({ kind: "list", b, bi, items });
+      // Isınma / soğuma: esneklik akışı gibi her hareket ayrı ekran (süreliyse sayaç); bitince kaydedilir (plStrDone)
+      if (b.warm || /^(Isınma|Soğuma)/.test(b.name)) items.forEach(({ it, k }) => steps.push({ kind: "str", b, bi, it, k, x: it.x, p: P.rx(it, wi), rname: b.name }));
+      else if (plIsList(b, items, wi)) steps.push({ kind: "list", b, bi, items });
       else items.forEach(({ it, k }) => steps.push({ kind: "ex", b, bi, it, k }));
     }
     if (b.tests && b.tests.length) steps.push({ kind: "tests", b, bi, items: simple });
@@ -2378,7 +2382,7 @@ function plBuild(date) {
 }
 function plItemDone(k, it, wi) { const L = itemLog(PL.date, k); return !!(L && L.sets && L.sets.filter((s) => s && s.ok).length >= plSets(it, wi)); }
 function plStepDone(st, wi) {
-  if (st.kind === "ex") return plItemDone(st.k, st.it, wi);
+  if (st.kind === "ex" || (st.kind === "str" && st.k)) return plItemDone(st.k, st.it, wi);
   if (st.kind === "list") return st.items.every(({ it, k }) => plItemDone(k, it, wi));
   if (st.kind === "tests") { const L = logDoc(PL.date); return !!(L && L.tdone && L.tdone[st.bi]); }
   return false;
@@ -2388,7 +2392,7 @@ function plSetIdx(st, wi) {
   for (let i = 0; i < n; i++) if (!(sets[i] && sets[i].ok)) return i;
   return n;
 }
-function plStepTitle(st) { return st.kind === "ex" ? (P.EX[st.it.x] || {}).n : st.kind === "end" ? "Seans sonu" : st.b.name; }
+function plStepTitle(st) { return st.kind === "ex" || st.kind === "str" ? (P.EX[st.x || st.it.x] || {}).n : st.kind === "end" ? "Seans sonu" : st.b.name; }
 function plNextIdx() { const wi = plWi(); let j = PL.i + 1; while (j < PL.steps.length - 1 && plStepDone(PL.steps[j], wi)) j++; return Math.min(j, PL.steps.length - 1); }
 function plElapsed() {
   const L = logDoc(PL.date); if (!L || !L.start) return "0:00";
@@ -2410,7 +2414,7 @@ function strPlan(p, half) {
   const sets = (m = /^(\d+)\s*[×x]/.exec(s)) ? +m[1] : 1;
   const one = /\/taraf/.test(s) ? (/sol 2 kez/i.test(s) ? ["Sol", "Sağ", "Sol"] : ["Sol", "Sağ"]) : [""];
   const seq = []; for (let i = 0; i < sets; i++) seq.push(...one);
-  const gap = (m = /(\d+)\s*sn ara/.exec(s)) ? +m[1] : Math.min(30, Math.max(15, Math.round(secs / 4)));
+  const gap = (m = /(\d+)\s*sn ara/.exec(s)) ? +m[1] : secs <= 10 ? secs : Math.min(30, Math.max(15, Math.round(secs / 4))); // kısa sıkmalar (pelvik 10 × 5 sn): ara = sıkma süresi
   return { secs, seq, gap, rounds: secs ? seq.length : 0, sides: one.length > 1 ? 2 : 1 };
 }
 // Süreli iş sayacı (esneme, ısınma satırı): hazırlan → süre → taraf değiştir / ara → … → bitti.
@@ -2457,18 +2461,21 @@ function plOpenRoutine(date, keys, akisK) {
 }
 function plStrHTML(st) {
   const e = P.EX[st.x] || { n: st.x, d: "", s: [] }, half = PL.routine && PL.routine.half, pl = strPlan(st.p, half), R = PL.str;
-  let h = '<button class="pl-name" data-pl="how">' + esc(e.n) + "</button>" + '<div class="pl-meta">' + (e.en ? esc(e.en) + " · " : "") + '<b class="pl-rx">' + esc(st.p) + "</b>" + (half && pl.secs ? " · bugün kısaltılmış: " + pl.secs + " sn" : "") + "</div>";
+  let h = '<button class="pl-name" data-pl="how">' + esc(e.n) + "</button>" + '<div class="pl-meta">' + (e.en ? esc(e.en) + " · " : "") + '<b class="pl-rx">' + esc(st.p) + "</b>" + (half && pl.secs ? " · bugün kısaltılmış: " + pl.secs + " sn" : "") + "</div>" + animOf(st.x);
   const how = e.s && e.s.length ? '<ol class="pl-how">' + e.s.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ol>" : "";
-  if (!pl.rounds) return h + how + plReadyLine() + '<button class="pl-cta" data-pl="strdone">Tamamlandı ✓</button>';
-  h += runHTML(R, pl, "Gerilme 10 üzerinden 6, acı yok");
-  const btn = !R ? plReadyLine() + '<button class="pl-cta" data-pl="strstart">Hazırım, başla</button><p class="small muted" style="margin:0;text-align:center">Taraf ve set geçişleri kendiliğinden; sıradaki esnemeye sen geçersin.</p>'
+  if (!pl.rounds) return h + plGoalHTML(st.p) + how + plReadyLine() + '<button class="pl-cta" data-pl="strdone">Tamamlandı ✓</button>';
+  h += runHTML(R, pl, PL.routine ? "Gerilme 10 üzerinden 6, acı yok" : "");
+  const btn = !R ? plReadyLine() + '<button class="pl-cta" data-pl="strstart">Hazırım, başla</button><p class="small muted" style="margin:0;text-align:center">' + (pl.rounds > 1 ? "Taraf ve set geçişleri kendiliğinden; süre" : "Süre") + " bitince sıradaki hareket gelir.</p>"
     : R.paused ? '<button class="pl-cta" data-pl="strpause">Devam et</button>'
     : R.phase === "prep" ? '<button class="pl-cta" data-pl="strgo">Hazırım, başla</button><button class="btn ghost" data-pl="strpause">Duraklat</button>'
     : '<button class="pl-cta sec" data-pl="strpause">Duraklat</button>';
   return h + btn + how; // sıradaki esneme "Sırada" satırında (alttaki sabit alan); içerikte tekrar edilmez
 }
 // Esneme bitince sıradaki esneme gelir; kişi "Hazırım, başla" der (geçen süre görünür), otomatik sayım yok.
-function plStrNext() { PL.i = Math.min(PL.i + 1, PL.steps.length - 1); plReset(PL.steps[PL.i].kind === "str"); }
+function plStrNext() { PL.i = plNextIdx(); plReset(PL.steps[PL.i].kind === "str"); }
+// Sayaç doldu ya da "Tamamlandı": seanstaki ısınma/soğuma hareketi kaydedilir (esneklik akışında kayıt yok); "Atla" kaydetmez
+function plStrDone() { const st = PL.steps[PL.i]; if (st.k) { plOkAll(st.k, st.it); Store.put("logs", PL.date); } plStrNext(); }
+function plOkAll(k, it) { const L = itemLog(PL.date, k, it.x, true), n = plSets(it, plWi()); for (let j = 0; j < n; j++) { L.sets[j] = L.sets[j] || {}; L.sets[j].ok = true; } }
 // Hareketler arası geçen süre: küçük kronometre, zorlama yok
 function plReadyLine() { return PL.ready ? '<p class="pl-sub" style="margin:0">Geçen süre <span class="num" id="plReady">' + fmtSec((Date.now() - PL.ready.t0) / 1000) + "</span></p>" : ""; }
 function plREndHTML() {
@@ -2528,8 +2535,7 @@ function plCompleteSet(st, wi, vals) {
 function plIvStart(st, wi) { PL.iv = { cfg: parseInterval(P.rx(st.it, wi), st.it), phase: "prep", round: 1, end: Date.now() + 10000, left: 10, run: true, last: null }; beep(880, 0.05); } // 10 sn hazırlık, sonra iş/dinlenme turları
 function plHoldNew(st, wi) { return { phase: "prep", end: Date.now() + T_PREP * 1000, side: 1, uni: /\/taraf/.test(P.rx(st.it, wi)), last: null, first: null }; }
 function plCompleteAll(st, wi) {
-  const it = st.it, L = itemLog(PL.date, st.k, it.x, true), n = plSets(it, wi);
-  for (let j = 0; j < n; j++) { L.sets[j] = L.sets[j] || {}; L.sets[j].ok = true; }
+  plOkAll(st.k, st.it);
   Store.put("logs", PL.date); toast("Tamamlandı ✓");
   PL.iv = null; plNext(true);
 }
@@ -2561,7 +2567,7 @@ function plExHTML(st, wi) {
   const it = st.it, e = P.EX[it.x] || { n: it.x }, rx = P.rx(it, wi), n = plSets(it, wi), i = plSetIdx(st, wi);
   const prev = it.t && it.t !== "x" ? prevPerf(PL.date, it.x) : null, sug = kgAdvice(it, PL.date, rx), iv = it.t === "x" ? parseInterval(rx, it) : null;
   // Ad (34/700), altında tek satır: İngilizce ad · reçete · dinlenme
-  let h = '<button class="pl-name" data-pl="how">' + esc(e.n) + "</button>" + '<div class="pl-meta">' + (e.en ? esc(e.en) + " · " : "") + '<b class="pl-rx">' + esc(rx) + "</b>" + (it.r ? " · dinlenme " + fmtSec(it.r) : "") + "</div>";
+  let h = '<button class="pl-name" data-pl="how">' + esc(e.n) + "</button>" + '<div class="pl-meta">' + (e.en ? esc(e.en) + " · " : "") + '<b class="pl-rx">' + esc(rx) + "</b>" + (it.r ? " · dinlenme " + fmtSec(it.r) : "") + "</div>" + animOf(it.x);
   if (it.n) h += '<p class="i-note" style="margin:0">' + esc(it.n) + "</p>";
   if (prev) h += '<p class="i-prev" style="margin:0">' + esc(prevText(prev, it.t)) + "</p>";
   if (sug && i < n) h += '<p class="hint" style="margin:0">' + esc(sug.msg) + "</p>";
@@ -2621,8 +2627,8 @@ function plExHTML(st, wi) {
 }
 // Giriş kutusu olmayan harekette (yalnız "Set tamam") hedef ortada büyük: "3×2" → 2 tekrar, "3 dk hafif" → 3 dakika · hafif, "10/taraf" → 10 tekrar · her taraf
 function plGoalHTML(rx) {
-  const m = /^\s*(?:\d+\s*[×x]\s*)?(\d+(?:\s*-\s*\d+)?)\s*(sn|dk|m\b)?\s*(.*)$/.exec(rx || ""); if (!m) return "";
-  const unit = { sn: "saniye", dk: "dakika", m: "metre" }[m[2]] || "tekrar", extra = m[3].replace(/^\/\s*taraf/, "her taraf").trim().replace(/^\((.*)\)$/, "$1");
+  const m = /^\s*(?:\d+\s*[×x]\s*)?(\d+(?:\s*-\s*\d+)?)\s*(sn|dk|m\b|tur|geçiş)?\s*(.*)$/.exec(rx || ""); if (!m) return "";
+  const unit = { sn: "saniye", dk: "dakika", m: "metre" }[m[2]] || m[2] || "tekrar", extra = m[3].replace(/^\/\s*(taraf|bacak)/, "her $1").trim().replace(/^\((.*)\)$/, "$1");
   return '<div class="pl-goal"><b class="num">' + esc(m[1].replace(/\s/g, "").replace("-", "–")) + "</b><span>" + esc(unit + (extra ? " · " + extra : "")) + "</span></div>";
 }
 function plTrySet(st, wi) {
@@ -2782,7 +2788,7 @@ function plRender() {
     '<div class="pl-body"><div class="pl-in">' + saveErrHTML() + body + '</div></div><div class="pl-act"></div>' +
     (st.kind === "end" || st.kind === "rend" ? "" : '<div class="pl-foot"><button data-pl="prev"' + (PL.i === 0 ? " disabled" : "") + ">" + FI('<path d="M15 5l-7 7 7 7"/>') + "Önceki</button>" +
       (st.kind === "ex" || st.kind === "str" ? '<button data-pl="how">' + FI('<circle cx="12" cy="12" r="10"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 4M12 17.5h.01"/>') + "Nasıl yapılır?</button>" : "") +
-      (st.kind === "ex" && altsOf(st.it.x, piOf(ctx(PL.date).ph.key)).length ? '<button data-pl="alt">' + FI('<path d="M4 8h14l-4-4M20 16H6l4 4"/>') + "Alternatif</button>" : "") + '<button data-pl="skip">' + FI('<path d="M9 5l7 7-7 7"/>') + "Atla</button></div>");
+      (st.k && altsOf(st.it.x, piOf(ctx(PL.date).ph.key)).length ? '<button data-pl="alt">' + FI('<path d="M4 8h14l-4-4M20 16H6l4 4"/>') + "Alternatif</button>" : "") + '<button data-pl="skip">' + FI('<path d="M9 5l7 7-7 7"/>') + "Atla</button></div>");
   // Sayaç halkası: .pl-timer içindeki büyük rakam ve durum etiketi halkanın ortasına alınır; dolum plRing() ile (her tikte)
   el.querySelectorAll(".pl-timer").forEach((t) => {
     const big = t.querySelector(".pl-big"); if (!big) return;
@@ -2857,7 +2863,7 @@ function plTick() {
   const runMany = (R) => { let r, n = 0; do { r = runTick(R); } while (r === "phase" && R.end <= Date.now() && n++ < 1000); return r; };
   if (st && st.kind === "str" && PL.str) {
     const r = runMany(PL.str);
-    if (r === "done") return plStrNext();
+    if (r === "done") return plStrDone();
     if (r) return plRender();
     if (big) big.textContent = runBig(PL.str);
     return;
@@ -2922,15 +2928,14 @@ document.addEventListener("click", (ev) => {
   if (a === "strstart") { PL.str = runNew(strPlan(st.p, PL.routine && PL.routine.half), PL.ready ? T_PREP : T_START, "Hazırlan · pozisyon al"); PL.ready = null; beep(660, 0.07); return plRender(); }
   if (a === "strgo") { const R = PL.str || PL.lt; if (R) { R.paused = false; R.end = Date.now(); plTick(); } return; }
   if (a === "strpause") { const R = PL.str || PL.lt; if (R) { runPause(R); plRender(); } return; }
-  if (a === "strdone") return plStrNext();
+  if (a === "strdone") return plStrDone();
   if (a === "homego") return plOpenRoutine(PL.date, [ctx(PL.date).sess.home], null);
   if (a === "akisgo") return plOpenRoutine(PL.date, ctx(PL.date).sess.flex || ["A", "B", "C"], st.k);
   if (a === "rclose") {
     const ak = PL.routine && PL.routine.akisK;
     if (ak) {
-      const c = ctx(PL.date), [bi, ii] = ak.split("-").map(Number), it = c.sess.blocks[bi].items[ii];
-      const L = itemLog(PL.date, ak, it.x, true), n = plSets(it, c.ph.wi);
-      for (let j = 0; j < n; j++) { L.sets[j] = L.sets[j] || {}; L.sets[j].ok = true; }
+      const [bi, ii] = ak.split("-").map(Number);
+      plOkAll(ak, ctx(PL.date).sess.blocks[bi].items[ii]);
       Store.put("logs", PL.date); return plOpen(PL.date);
     }
     return plClose();
@@ -2986,7 +2991,7 @@ document.addEventListener("click", (ev) => {
     st.items.forEach(({ k }) => plMarkItem(st, k, true)); return plNext();
   }
   if (a === "listdone") {
-    st.items.forEach(({ it, k }) => { const L = itemLog(PL.date, k, it.x, true), n = plSets(it, wi); for (let j = 0; j < n; j++) { L.sets[j] = L.sets[j] || {}; L.sets[j].ok = true; } });
+    st.items.forEach(({ it, k }) => plOkAll(k, it));
     Store.put("logs", PL.date); buzz(40); return plNext();
   }
   if (a === "testsdone") {

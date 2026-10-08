@@ -519,6 +519,19 @@ const toast = (m) => {
 };
 const closeSheet = () => { if (!window.TK) $("#sheetRoot").innerHTML = ""; };
 document.addEventListener("click", (ev) => { const el = ev.target.closest('[data-act="close"]'); if (el && (ev.target === el || el.classList.contains("x"))) closeSheet(); });
+// Telefonun geri tuşu / kenardan geri kaydırma: ekrandaki geri düğmesine basılmış gibi (alt sayfa → antrenman modu → sihirbazda önceki adım → alt ekran → Bugün).
+// Geçmişte tek "bekçi" kayıt durur; geri gelince en üstteki düğmeye basılır ve bekçi yeniden kurulur. Bugün'de 2,5 sn içinde ikinci geri uygulamadan çıkar.
+// Android uygulamasında geri tuşunu WebView geçmişine MainActivity bağlar. Claude bağlantısında (iframe) yok: sayfanın geçmişine karışmasın.
+if (!inArt()) {
+  const vis = (s) => [...document.querySelectorAll(s)].find((e) => e.getClientRects().length);
+  const arm = () => history.pushState({ tkBack: 1 }, "");
+  window.addEventListener("popstate", () => {
+    const b = vis("#sheetRoot .sheet .x") || vis('#player [data-pl="close"]') || vis('[data-wz-go="back"]') || vis('[data-wz-go="cancel"]') || vis("#main .prof-back") || vis('.nav [data-act="nav"][data-v="gun"]:not(.on)');
+    if (b) { b.click(); arm(); return; }
+    toast("Çıkmak için tekrar geri"); setTimeout(arm, 2500); // bu arada ikinci geri: bekçi yok, uygulama kapanır
+  });
+  if (!(history.state && history.state.tkBack)) arm(); // yenilemede bekçi zaten var
+}
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeSheet(); });
 // Gizlilik (bilgi/veri-gizlilik.md "Yapıyoruz" bölümünün kullanıcı dili)
 const PRIV_BTN = '<button type="button" class="backlink" style="margin:-11px -6px;padding:11px 6px;font-size:inherit" data-pub="privacy">Gizlilik</button>';

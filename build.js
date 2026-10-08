@@ -42,11 +42,12 @@ const head = `<!doctype html>
 <body>
 `;
 // Android uygulaması: TK_REL = sürüm numarası (GitHub Actions'ta etiketten, v12 → "12"); TK_REPO = APK'ların indiği GitHub deposu
+const WEB_JS = ["lib.js", "engine.js", "anim.js", "public.js"]; // anim.js (hareket canlandırmaları) yalnız web / Android sürümünde
 const REPO = process.env.TK_REPO || "mehm24et35/tatami-kampi", REL = (process.env.TK_REL || "").replace(/\D/g, "");
 const scripts = "window.TK_NEWS = " + NEWS + "; window.TK_PUSH_KEY = " + JSON.stringify(PUSH.publicKey || "") + "; window.TK_REPO = " + JSON.stringify(REPO) + "; window.TK_REL = " + JSON.stringify(REL) + ";\n" +
-  '</script><script src="js/lib.js?v=' + BUILD + '"></script><script src="js/engine.js?v=' + BUILD + '"></script><script src="js/public.js?v=' + BUILD + '"></script><script>';
+  "</script>" + WEB_JS.map((f) => '<script src="js/' + f + "?v=" + BUILD + '"></script>').join("") + "<script>";
 write("dist/web/index.html", head + withFonts(tracker, LOCAL_FONTS).replace("/*__DATA__*/", () => scripts) + "\n</body>\n</html>\n");
-["lib.js", "engine.js", "public.js"].forEach((f) => write("dist/web/js/" + f, read("js/" + f)));
+WEB_JS.forEach((f) => write("dist/web/js/" + f, read("js/" + f)));
 write("dist/web/manifest.webmanifest", JSON.stringify({
   name: "Tatami Kampı", short_name: "Tatami", description: "Kişisel antrenman programı ve adım adım antrenman modu",
   start_url: "./", scope: "./", display: "standalone", orientation: "portrait", lang: "tr",
@@ -58,7 +59,7 @@ write("dist/web/manifest.webmanifest", JSON.stringify({
   ],
 }, null, 2));
 // Çevrimdışı iskelete uygulama kodu da girer (sürümlü adreslerle; sayfanın istediği adresle birebir aynı olmalı)
-const JS_URLS = ["lib.js", "engine.js", "public.js"].map((f) => "js/" + f + "?v=" + BUILD);
+const JS_URLS = WEB_JS.map((f) => "js/" + f + "?v=" + BUILD);
 const SHELL_EXTRA = JS_URLS.concat(FONTS.map((f) => "fonts/" + f));
 const sw = read("src/sw.js").replace("__BUILD__", BUILD).replace(/(const SHELL = \[[^\]]*)\]/, (m, a) => a + ", " + SHELL_EXTRA.map((u) => JSON.stringify(u)).join(", ") + "]");
 if (!JS_URLS.every((u) => sw.includes(JSON.stringify(u)))) throw new Error("sw.js içinde SHELL dizisi bulunamadı");
