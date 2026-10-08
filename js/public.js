@@ -12,6 +12,7 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":
 window.TK_BUILD = (/[?&]v=([\w.-]+)/.exec((document.currentScript && document.currentScript.src) || "") || [])[1] || ""; // derleme damgası (Profil › Uygulama › Sürüm)
 const load = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+{ const a0 = load(KEY_ANS); if (a0 && a0.ai) try { E.aiLib(a0.ai); } catch (e) {} } // yapay zekânın özel hareketleri (EXK ve adapt görsün)
 const pad = (n) => String(n).padStart(2, "0");
 const iso = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
 const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"], GUNLER = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
@@ -343,6 +344,7 @@ const VIEW = {
       (gen.RULES.slice(0, 2).filter((r) => /Sağlık|ağrın|Hamilelik/.test(r.h)).map((r) => '<div class="wz-warn"><b>' + esc(r.h) + ":</b> " + esc(r.t) + "</div>").join("")) +
       (sm.reasons && sm.reasons.length ? '<div class="wz-field"><span>Neden böyle kurdum?</span><ul class="wz-list">' + sm.reasons.map((r) => "<li>" + esc(r) + "</li>").join("") + "</ul></div>" : "") +
       (+A.age < 18 ? '<div class="wz-warn"><b>18 yaşından küçüksün:</b> Ağırlık çalışmalarını bir yetişkin veya antrenör gözetiminde yap.</div>' : "") +
+      (A.ai ? '<p class="wz-note">Program yapay zekânla kuruldu: günler ve hareketler o programdan gelir. Değiştirmek için Program › Yapay zekâ programın.</p>' : "") +
       '<p class="wz-note">' + (editing === "q2" ? "Program gelecek Pazartesi'den itibaren yeni cevaplarınla kurulur; bu hafta ve kayıtların olduğu gibi kalır." : editing ? "Program hemen yenilenir; bu hafta yaptığın günler ve kayıtların olduğu gibi kalır." : "Başlangıç: " + esc(trDate(A.start, true)) + ".") + " Her şeyi sonradan Profil › Cevaplarım ve ekipman'dan değiştirebilirsin.</p>";
   },
 };
@@ -547,8 +549,9 @@ const privacy = () => sheet("Gizlilik", '<h2>Gizlilik</h2><ul style="margin-top:
 // Program ekranı: "head" = başlığın altındaki tek satır özet (cevaplar, yazdırma, değiştirilen hareketler Profil › Cevaplarım ve ekipman'da)
 window.TK_PROGRAM_EXTRA = (part) => {
   const P = window.PLAN, sm = P.summary || {};
+  if (part === "head" && sm.ai) return '<p class="small muted" style="margin:0 0 16px"><b style="color:var(--ink);font-weight:600">' + esc(sm.ai) + "</b> · " + (sm.days || []).length + " gün · yapay zekânla kuruldu</p>" + aiRow();
   return part === "head" ? '<p class="small muted" style="margin:0 0 16px"><b style="color:var(--ink);font-weight:600">' + esc(sm.levelName || "") + (sm.cautious ? " · temkinli" : "") + "</b> · " + (sm.days || []).length + " gün · " + esc(sm.mins) + " dk · Hedef: " +
-    esc((sm.goals || []).map((g) => GOALN[g]).join(", ")) + "</p>" : "";
+    esc((sm.goals || []).map((g) => GOALN[g]).join(", ")) + "</p>" + aiRow() : "";
 };
 // Ekipman özeti (Cevaplarım ve ekipman): eski alet cevabı sihirbazdaki gibi açılır (merge)
 function eqText(ans) {
@@ -580,6 +583,100 @@ window.TK_SETTINGS_EXTRA = (part) => {
     srowAct("Gizlilik", 'data-pub="privacy"', "Veriler nerede durur, ne gönderilir") + "</section>";
 };
 
+// ---------------- yapay zekâyla program (biçim ve denetim: engine.js › aiCheck) ----------------
+// Kişi hazır metni kendi yapay zekâsına verir, konuşur, çıkan kodu yapıştırır. Bilgiler bize gelmez; uygulama biçimi, süreyi ve aletleri denetler.
+const aiRow = () => { const on = !!(load(KEY_ANS) || {}).ai; return '<section class="slist" style="margin:0 0 16px">' + srowAct(on ? "Yapay zekâ programın" : "Yapay zekânla kendi programını kur", 'data-pub="ai"', on ? "Güncelle ya da uygulamanın programına dön" : "ChatGPT, Gemini ya da Claude ile konuşarak") + "</section>"; };
+const AI_EQ = { pullbar: "barfiks demiri", band: "direnç bandı", anchor: "bant bağlama yeri", rope: "atlama ipi", stairs: "merdiven", db: "dambıl", kb: "kettlebell", barbell: "halter", rack: "squat sehpası", bench: "düz sehpa", landmine: "landmine ya da köşe",
+  cable: "kablo", latmach: "lat makinesi", lpmach: "leg press", legmach: "bacak bükme/açma makinesi", pressmach: "press makinesi", cardio: "kardiyo makinesi", rings: "halka/TRX", dip: "paralel bar", box: "kutu", bag: "boks torbası", medball: "sağlık topu", ladder: "koordinasyon merdiveni", outdoor: "açık alan" };
+const AI_L = { yil: { yok: "hiç ya da 3 aydan az", az: "3-12 ay", orta: "1-3 yıl", cok: "3 yıldan fazla" }, freq: { 0: "hiç", "1-2": "haftada 1-2 gün", "3-4": "haftada 3-4 gün", "5+": "haftada 5+ gün" },
+  bg: { agirlik: "ağırlık/fitness", kalistenik: "vücut ağırlığı", kosu: "koşu/bisiklet/yüzme", dovus: "dövüş sporu", takim: "takım sporu", yoga: "yoga/pilates" },
+  cond: { tansiyon: "yüksek tansiyon", astim: "astım/egzersizde nefes darlığı", seker: "şeker hastalığı", kemik: "kemik erimesi", artrit: "eklem romatizması", denge: "denge sorunu ya da son 1 yılda düşme" },
+  focus: { bacak: "bacak ve kalça", ust: "göğüs ve omuz", sirt: "sırt", kol: "kollar", karin: "karın ve gövde", durus: "duruş" }, place: { ev: "evde", salon: "kendi küçük salonumda", spor: "spor salonunda" },
+  act: { otur: "çoğunlukla oturarak", ayakta: "ayakta ve yürüyerek", agir: "ağır fiziksel iş" }, sleep: { az: "6 saatten az", orta: "6-7 saat", iyi: "7 saatten fazla" }, stress: { az: "düşük", orta: "orta", cok: "yüksek" },
+  cardio: { yuru: "yürüyüş", kos: "koşu", ip: "ip atlama" }, dislike: { sicrama: "sıçramak", yerde: "yere yatıp kalkmak zor", basustu: "baş üstüne itmek" }, tod: { sabah: "sabah", gun: "gün içi", aksam: "akşam" },
+  env: { sessiz: "sıçrama sesi sorun olur", dar: "yerim dar" }, postp: { "0-6": "0-6 hafta önce", "6-12": "6-12 hafta önce", "12-24": "3-6 ay önce" }, inj: { gecmis: "geçmişte sorun", agri: "şu an ağrı" } };
+function aiAbout(A) {
+  const L = [], li = (arr, o) => (arr || []).map((k) => o[k] || k).join(", "), dn = (arr) => (arr || []).map((k) => (E.DAYS.find((d) => d.k === k) || { n: k }).n).join(", ");
+  const tv = (id) => { const v = (A.tests || {})[id]; if (v == null || v === "") return "bilmiyorum"; const o = TB[id].o.find(([, lo, hi]) => +v >= lo && +v <= hi); return o ? o[0] : String(v); };
+  L.push(A.age + " yaşında " + (A.sex === "k" ? "kadın" : "erkek") + ", boy " + A.height + " cm, kilo " + A.weight + " kg" + (A.goalWeight ? ", hedef kilo " + A.goalWeight + " kg" : ""));
+  const pq = (A.parq || []).map((v, i) => (v ? E.PARQ[i] : null)).filter(Boolean);
+  L.push("Sağlık taraması: " + (pq.length ? "evet dediklerim: " + pq.join(" / ") + (A.parqOK === true ? " (doktor onaylı, kontrol altında)" : " (doktor onayı yok ya da bilmiyorum)") : "hepsine hayır"));
+  if ((A.cond || []).length) L.push("Doktorun söylediği durumlar: " + li(A.cond, AI_L.cond));
+  if (A.preg) L.push("Hamileyim."); else if (A.postp) L.push("Doğum: " + AI_L.postp[A.postp]);
+  const inj = Object.keys(A.inj || {}).filter((j) => AI_L.inj[A.inj[j]]);
+  L.push("Sakatlık / ağrı: " + (inj.length ? inj.map((j) => LIB.JOINTS[j] + " (" + AI_L.inj[A.inj[j]] + ")").join(", ") : "yok"));
+  L.push("Spor geçmişi: toplam " + (AI_L.yil[A.yil] || "?") + ", son 3 ayda " + (AI_L.freq[A.freq] || "?") + ((A.bg || []).length ? "; düzenli yaptıklarım: " + li(A.bg, AI_L.bg) : ""));
+  L.push("Hedefler (önem sırasıyla): " + (A.goals || []).map((g) => E.GOALS[g]).join(", ") + (A.focus ? "; öncelikli bölge: " + AI_L.focus[A.focus] : ""));
+  L.push("Antrenman günleri: " + dn(A.days) + ", her biri " + A.mins + " dk" + ((A.shortDays || []).length ? " (" + dn(A.shortDays) + " " + A.shortMins + " dk)" : "") + (A.tod ? "; genelde " + AI_L.tod[A.tod] : ""));
+  if (A.event) L.push("Hazırlandığım tarih (müsabaka/etkinlik): " + trDate(A.event));
+  L.push("Yer: " + (AI_L.place[A.place] || "") + (A.outdoor ? ", koşabileceğim açık alan var" : "") + ((A.env || []).length ? " (" + li(A.env, AI_L.env) + ")" : ""));
+  const eq = A.eq.map((k) => AI_EQ[k] || k);
+  L.push("Aletlerim: " + (eq.length ? eq.join(", ") : "hiç yok (aletsiz)") + "; duvar, kapı, havlu ve sandalye var" +
+    (A.dbKind === "sabit" && A.dbList ? "; dambıllar: " + A.dbList + " kg" : A.dbKind === "ayar" && A.dbMaxKg ? "; ayarlanabilir dambıl en çok " + A.dbMaxKg + " kg" : "") + (A.barKg ? "; bar " + A.barKg + " kg" : "") + ((A.bands || []).length ? "; bantlar: " + A.bands.join(", ") : ""));
+  if ((A.lifts || []).length) L.push("Barla öğrendiğim kaldırışlar: " + A.lifts.join(", "));
+  L.push("Gün içinde " + (AI_L.act[A.act] || "?") + "; uyku " + (AI_L.sleep[A.sleep] || "?") + "; stres " + (AI_L.stress[A.stress] || "?") + (A.cardio ? "; kondisyonda tercihim " + AI_L.cardio[A.cardio] : ""));
+  if ((A.dislike || []).length) L.push("Yapmak istemediklerim: " + li(A.dislike, AI_L.dislike));
+  L.push("Seviyem: şınav " + tv("pushup") + (A.eq.includes("pullbar") ? ", barfiks " + tv("pullup") : "") + ", plank " + tv("plank") + ", kondisyon: " + tv("run") +
+    Object.keys(A.rm || {}).filter((k) => +A.rm[k] > 0).map((k) => ", " + RM_LBL[k] + " 5 tekrar " + A.rm[k] + " kg").join(""));
+  if ((A.avoid || []).length) L.push("Programdan çıkardığım hareketler (kullanma): " + A.avoid.map((id) => (LIB.EX[id] || { n: id }).n).join(", "));
+  return L.map((x) => "- " + x).join("\n");
+}
+function aiPrompt(A) {
+  const lib = Object.keys(LIB.CATS).filter((c) => c !== "ozel").map((c) => "## " + LIB.CATS[c] + "\n" + Object.values(LIB.EX).filter((e) => e.c === c && !e.ai).map((e) => {
+    const eq = e.eq.map((alt) => alt.filter((q) => q !== "none").map((q) => AI_EQ[q] || q).join("+")).filter(Boolean);
+    return e.id + ": " + e.n + " / " + e.en + (!eq.length ? "" : " [" + (eq.length < e.eq.length ? "aletsiz ya da " : "") + eq.join(" ya da ") + "]");
+  }).join("\n")).join("\n\n");
+  const ex = { tatami: 1, ad: "Programın kısa adı", not: "Programın mantığı, tek cümle", gunler: { pzt: { baslik: "Alt vücut · Kuvvet", bloklar: [
+    { ad: "Isınma", isinma: true, hareketler: [{ id: "airsquat", recete: "10" }, { id: "wgs", recete: "4/taraf" }] },
+    { ad: "A · Kuvvet", hareketler: [{ id: "goblet", recete: ["3×10", "4×8", "4×6"], dinlenme: 120, not: "Her sette 2 tekrar yedekte bırak." }] },
+    { ad: "Soğuma", hareketler: [{ id: "couch", recete: "60 sn/taraf" }] }] } }, ozel: [] };
+  return "Sen deneyimli bir antrenman koçusun. Benim için \"Tatami Kampı\" adlı telefon uygulamasına yüklenecek, bana özel bir haftalık antrenman programı hazırlayacaksın.\n\n" +
+    "NASIL ÇALIŞACAĞIZ\n1. Önce aşağıdaki bilgilerimi oku. Eksik ya da belirsiz bir şey varsa (hedefim, sağlığım, sakatlığım, aletlerim, zamanım) programı yazmadan önce bana sor; bir seferde en fazla 3 soru.\n" +
+    "2. Ben \"programı yaz\" deyince programı aşağıdaki biçimde, TEK bir json kod bloğu içinde, kesmeden yaz. Kodun içi geçerli JSON olsun (yorum yok, sondaki virgül yok).\n3. Kod bloğundan sonra en fazla 3 cümle açıklama yaz.\n\n" +
+    "KURALLAR\n- Hareketleri yalnız aşağıdaki HAREKET LİSTESİ'nden seç; \"id\" alanına listedeki kodu aynen yaz. Listede gerçekten olmayan bir hareket şartsa \"ozel\" bölümüne ekle (id \"ozel1\", \"ozel2\"…, en fazla 8) ve o id'yi kullan.\n" +
+    "- Sadece elimdeki aletlerle yapılabilen hareketleri seç; sağlık ve sakatlık bilgilerime uy.\n- Gün kodları: pzt sal car per cum cmt paz. Yazmadığın gün dinlenme günüdür. En az 2 antrenman günü.\n" +
+    "- Her günün ilk bloğu ısınma (\"isinma\": true). Son blok soğuma olabilir (adı \"Soğuma\").\n" +
+    "- recete yazımı: \"4×8\" (set×tekrar), \"3×8-12\", \"3×30 sn\" (süreli tutuş), \"3×10/taraf\" (tek taraflı), \"10 dk\" (süre). Isınma ve soğumada \"10\", \"60 sn\", \"2×10\", \"5 dk hafif\" de olur.\n" +
+    "- Program 12 hafta sürer. Reçete her hafta aynıysa tek metin yaz; ilerlemesi gerekiyorsa 3 elemanlı dizi yaz: [1-3. haftalar, 5-7. haftalar, 9-11. haftalar]. Hafta 0'ı (alışma ve başlangıç testi) ve 4, 8, 12. haftaları (hafif hafta + test) uygulama kendisi kurar; onları yazma.\n" +
+    "- dinlenme: setler arası dinlenme, saniye (ör. 90). Isınmada yazma.\n- Kilo (kg) yazma; uygulama kayıtlarıma göre her sette kilo önerir.\n- Bir hareket en fazla 10 set, bir gün en fazla 180 dakika. not: isteğe bağlı kısa ipucu (en fazla 200 harf).\n\n" +
+    "BİÇİM (örnek; özel hareket yoksa \"ozel\": [])\n```json\n" + JSON.stringify(ex, null, 1) + "\n```\nÖzel hareket örneği: {\"id\": \"ozel1\", \"ad\": \"Hareketin adı\", \"aciklama\": \"Nasıl yapılır, 1-3 cümle\", \"tur\": \"tekrar\"} · tur: \"tekrar\", \"kg\" (ağırlıkla) ya da \"sure\" (saniye tutulur).\n\n" +
+    "BENİM BİLGİLERİM\n" + aiAbout(merge(A)) + "\n\n" + (A.ai ? "ŞU ANKİ PROGRAMIM (değişiklik istersem bunu temel al)\n```json\n" + JSON.stringify(A.ai) + "\n```\n\n" : "") +
+    "HAREKET LİSTESİ (kod: Türkçe ad / İngilizce ad [gereken alet])\n" + lib + "\n";
+}
+let aiPending = null, aiErrText = "";
+const aiCopy = (s) => { try { navigator.clipboard.writeText(s).then(() => toast("Kopyalandı."), () => toast("Kopyalanamadı; metni basılı tutup seç.")); } catch (e) { toast("Kopyalanamadı; metni basılı tutup seç."); } };
+function aiSheet() {
+  const ans = load(KEY_ANS) || {};
+  sheet("Yapay zekânla program", '<h2>Yapay zekânla program kur</h2><ol class="small" style="margin:8px 0 12px;padding-left:20px;display:grid;gap:4px">' +
+    "<li>Hazır metni kopyala. İçinde cevapların ve uygulamadaki hareketler var.</li><li>ChatGPT, Gemini ya da Claude'a yapıştır. Eksik bir şey varsa sana sorar; istediğin kadar konuş.</li>" +
+    "<li>Hazır olunca <b>programı yaz</b> de. Verdiği kodu kopyalayıp aşağıya yapıştır.</li></ol>" +
+    '<textarea id="txtOut" readonly aria-label="Yapay zekâya verilecek metin" style="min-height:64px;font-size:var(--fs-s)">' + esc(aiPrompt(ans)) + "</textarea>" +
+    '<button class="btn ghost" style="width:100%;margin-top:6px;height:46px" data-act="copytxt">Hazır metni kopyala</button>' +
+    '<textarea id="aiIn" aria-label="Yapay zekânın verdiği kod" aria-describedby="aiErr" style="min-height:110px;font-size:var(--fs-s);margin-top:16px" placeholder="Yapay zekânın verdiği kodu buraya yapıştır"></textarea><div id="aiErr" role="alert"></div>' +
+    '<button class="btn" style="width:100%;margin-top:6px;height:46px" data-pub="aigo">Programı kontrol et</button>' +
+    (ans.ai ? '<button class="btn ghost" style="width:100%;margin-top:8px;height:44px" data-pub="aioff">Uygulamanın programına dön</button>' : "") +
+    '<p class="small muted" style="margin:12px 0 0">Bilgilerin bize gelmez; metni kendi yapay zekâna sen verirsin. Programın içeriği yapay zekânın sorumluluğunda; uygulama biçimini, süresini ve aletlerini kontrol eder.</p>');
+}
+function aiGo() {
+  const ta = $("#aiIn"), el = $("#aiErr"), v = ta ? ta.value.trim() : "";
+  const r = v ? E.aiCheck(v) : { err: ["Önce yapay zekânın verdiği kodu kutuya yapıştır."] };
+  if (r.err.length) {
+    aiErrText = "Tatami Kampı programı yükleyemedi:\n" + r.err.map((x) => "- " + x).join("\n") + "\nLütfen bunları düzeltip programın tamamını aynı biçimde, tek kod bloğunda yeniden yaz.";
+    if (el) el.innerHTML = '<div class="wz-warn" style="margin-top:8px"><b>Yüklenemedi:</b><ul style="margin:6px 0 0;padding-left:18px">' + r.err.map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul>" +
+      (v ? '<p class="small" style="margin:8px 0">Hatayı kopyalayıp yapay zekâna yapıştır; düzeltilmiş kodu verir.</p><button class="btn ghost sm" data-pub="aierr">Hatayı kopyala</button>' : "") + "</div>";
+    return;
+  }
+  aiPending = r.ai;
+  const ans = load(KEY_ANS), g = E.generate(Object.assign({}, ans, { ai: r.ai })), P = E.profile(Object.assign({}, ans, { days: Object.keys(r.ai.gunler) })), seen = new Set(), warn = [];
+  // Uyarı (engel değil): aleti işaretli değil, sakatlık / sağlık kuralına takılıyor; kişi yapay zekâsına söyleyebilir ya da aleti ekleyebilir
+  Object.values(r.ai.gunler).forEach((d) => d.bloklar.forEach((b) => b.hareketler.forEach((h) => { if (seen.has(h.id) || !LIB.EX[h.id] || LIB.EX[h.id].ai) return; seen.add(h.id); const w = E.swapBlocked(h.id, P, 1); if (w) warn.push(LIB.EX[h.id].n + ": " + w); })));
+  sheet("Programı kur", '<h2>Programı kur</h2><p style="margin:4px 0 10px"><b>' + esc(r.ai.ad) + "</b> · " + Object.keys(r.ai.gunler).length + " gün</p>" + (r.ai.not ? '<p class="small muted" style="margin:0 0 10px">' + esc(r.ai.not) + "</p>" : "") +
+    '<table class="wz-week">' + E.DAYS.map((d) => { const s = g.S.F1[d.k]; return "<tr><td>" + d.s + "</td><td>" + (s ? esc(s.title) + " <small>" + esc(s.dur) + "</small>" : '<span class="muted">Dinlenme</span>') + "</td></tr>"; }).join("") + "</table>" +
+    (warn.length ? '<div class="wz-warn" style="margin-top:12px"><b>Dikkat:</b><ul style="margin:6px 0 0;padding-left:18px">' + warn.slice(0, 8).map((x) => "<li>" + esc(x) + "</li>").join("") + "</ul><p class=\"small\" style=\"margin:8px 0 0\">Yapay zekâna söyleyip değiştirebilir ya da aletin varsa Profil › Cevaplarım ve ekipman'dan ekleyebilirsin.</p></div>" : "") +
+    '<p class="small muted" style="margin:12px 0">Bugünden itibaren programın bu olur; yaptığın günler ve kayıtların kalır. Hafta 0 alışma, 4, 8 ve 12. haftalar hafif hafta + test olarak uygulamadan gelir.</p>' +
+    '<div style="display:grid;gap:8px"><button class="btn" style="height:46px" data-pub="aiset">' + (warn.length ? "Yine de kur" : "Kurulsun") + '</button><button class="btn ghost" data-pub="ai">Geri</button></div>');
+}
+
 const BK_V = 1; // yedek biçimi sürümü
 const KEY_PREV = "tk_web_prev"; // yedek yüklemeden önceki durum (bir kez geri alınabilir)
 const BK_MAX = 6e6; // yedek metni üst sınırı (karakter)
@@ -607,7 +704,7 @@ const ANS_SCHEMA = { age: numIn(12, 90), sex: oneOf(["e", "k"]), height: numIn(1
   shortDays: listOf(DAYK), shortMins: numIn(15, 90), tod: oneOf(["sabah", "gun", "aksam"]), event: (v) => (v === "" ? "" : ISO_D.test(v) ? v : undefined),
   place: oneOf(["ev", "salon", "spor"]), outdoor: bool, env: listOf(["sessiz", "dar"]), eq: listOf(EQK), dbMax: oneOf(["", "hafif", "orta", "agir", "ayar"]), inj: mapOf(Object.keys(LIB.JOINTS), oneOf(["yok", "gecmis", "agri"])),
   dbKind: oneOf(["", "sabit", "ayar"]), dbList: str(60), dbMaxKg: emptyOr(numIn(1, 100)), dbStep: emptyOr(numIn(0.25, 10)), barKg: emptyOr(numIn(5, 30)), plateMin: emptyOr(numIn(0.25, 10)), bands: listOf(["hafif", "orta", "sert"]), lifts: listOf(["squat", "dl", "bench", "ohp"]),
-  tests: mapOf(["pushup", "pullup", "plank", "run"], numIn(0, 9999)), rm: mapOf(["squat", "dl", "bench"], numIn(0, 9999)), eqV: numIn(0, 9), qV: numIn(0, 9), cycle: numIn(1, 99), avoid: listOf(EXK), swap: mapOf(EXK, oneOf(EXK)),
+  tests: mapOf(["pushup", "pullup", "plank", "run"], numIn(0, 9999)), rm: mapOf(["squat", "dl", "bench"], numIn(0, 9999)), eqV: numIn(0, 9), qV: numIn(0, 9), cycle: numIn(1, 99), avoid: listOf(EXK), swap: mapOf(EXK, oneOf(EXK)), ai: (v) => { const r = isObj(v) ? E.aiCheck(v) : null; return r && !r.err.length ? r.ai : undefined; },
   exp: oneOf(["yok", "az", "orta", "cok"]), gap: oneOf(["aktif", "kisa", "uzun"]) };
 function cleanAnswers(a) { const o = {}; Object.keys(ANS_SCHEMA).forEach((k) => { if (!isObj(a) || a[k] === undefined) return; const v = ANS_SCHEMA[k](a[k]); if (v !== undefined) o[k] = v; }); return o; }
 const SET_CLEAN = { start: (v) => (ISO_D.test(v) ? v : undefined), age: numIn(12, 90), height: numIn(100, 250), sex: oneOf(["e", "k"]), pauses: (v) => (Array.isArray(v) ? v.filter((p) => typeof p === "string" && ISO_D.test(p)).slice(0, 60) : undefined), calTime: (v) => (/^\d{2}:\d{2}$/.test(v) ? v : undefined) };
@@ -638,7 +735,7 @@ function cleanData(d) {
 }
 // Plan yapısal olarak takip çekirdeğinin beklediği gibi mi (yalnız kütüphane hareketleri)? Değilse cevaplardan yeniden üretilir.
 function okPlan(p) {
-  const sessOK = (s) => isObj(s) && (s.blocks == null || (Array.isArray(s.blocks) && s.blocks.every((b) => isObj(b) && (b.items == null || (Array.isArray(b.items) && b.items.every((it) => isObj(it) && EXK.includes(it.x)))))));
+  const sessOK = (s) => isObj(s) && (s.blocks == null || (Array.isArray(s.blocks) && s.blocks.every((b) => isObj(b) && (b.items == null || (Array.isArray(b.items) && b.items.every((it) => isObj(it) && (EXK.includes(it.x) || !!(LIB.EX[it.x] && LIB.EX[it.x].ai))))))));
   const SOK = (S) => isObj(S) && isObj(S.F1) && Object.values(S).every((ph) => isObj(ph) && Object.values(ph).every(sessOK));
   return isObj(p) && typeof p.v === "number" && SOK(p.S) && Array.isArray(p.PHASES) && p.PHASES.every((ph) => isObj(ph) && typeof ph.key === "string" && Array.isArray(ph.weeks)) &&
     Array.isArray(p.DAYS) && p.DAYS.every((d) => isObj(d) && DAYK.includes(d.k)) && isObj(p.ROUTINES) && Object.values(p.ROUTINES).every((R) => isObj(R) && Array.isArray(R.items) && R.items.every((it) => isObj(it) && EXK.includes(it.x))) &&
@@ -656,6 +753,7 @@ function parseBackup(text) {
   if (j.v > BK_V) return { err: "Bu yedek uygulamanın daha yeni bir sürümünden. Önce bu cihazdaki uygulamayı güncelle, sonra tekrar dene." };
   const a = cleanAnswers(j.answers), miss = [[a.age != null, "yaş"], [!!a.sex, "cinsiyet"], [(a.days || []).length >= 2, "günler"], [!!a.place, "antrenman yeri"], [!!a.start, "başlangıç tarihi"], [j.data == null || isObj(j.data), "kayıtlar"]].filter((x) => !x[0]).map((x) => x[1]);
   if (miss.length) return { err: "Bu yedek eksik ya da bozuk (" + miss.join(", ") + "). Hiçbir şeyi değiştirmedim." };
+  if (a.ai) E.aiLib(a.ai); // yedekteki yapay zekâ programının özel hareketleri (plan denetimi ve yeniden kurulum görsün)
   let plan = j.plan, regen = false;
   if (!okPlan(plan)) { // yapı tutmuyor: planı yedekten alma, cevaplardan kur (eski slotlar korunmaya çalışılır)
     let prev = null; try { prev = E.prevOf(plan); } catch (e) {}
@@ -713,6 +811,15 @@ document.addEventListener("click", (ev) => {
   if (a === "q2later") { lsSet("tk_q2_later", iso(new Date())); rr(); return; }
   if (a === "hide") { try { sessionStorage.setItem(t.dataset.v, "1"); } catch (e) {} window.TK.render(); return; }
   if (a === "recal") { const r = recal(), ans = load(KEY_ANS); if (r && rebuild(r.A2, Math.max(0, curWeek(ans) + 1))) location.reload(); return; }
+  if (a === "ai") return aiSheet();
+  if (a === "aigo") return aiGo();
+  if (a === "aierr") return aiCopy(aiErrText);
+  if (a === "aiset" || a === "aioff") {
+    if (a === "aioff" && !t.classList.contains("danger")) { t.classList.add("danger"); t.textContent = "Evet, yapay zekâ programını kaldır"; return; } // ikinci dokunuşta (program metni kaybolur; hazır metinde duruyor)
+    const ans = load(KEY_ANS), A2 = Object.assign({}, ans); if (a === "aiset") { if (!aiPending) return; A2.ai = aiPending; } else delete A2.ai;
+    let g = null; try { g = rebuildNow(A2); } catch (e) { console.error(e); }
+    if (g) location.reload(); else toast("Kaydedemedim; depolama dolu olabilir."); return;
+  }
   if (a === "recalok") { const g = load(KEY_PLAN); g.calib = iso(new Date()); save(KEY_PLAN, g); window.TK.render(); return; }
   if (a === "cycle") return nextCycle();
   if (a === "swapto") { // Hareketler › Bu hareketi değiştir: sayfa yenilenmez; sonuç ve 5 sn "Geri al" bildirimde

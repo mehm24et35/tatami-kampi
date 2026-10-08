@@ -1,5 +1,14 @@
 [
   {
+    "v": "2026-10-08b",
+    "t": "Yeni: kendi yapay zekânla (ChatGPT, Gemini, Claude) sana özel program kur",
+    "m": [
+      "Program ekranında yeni: Yapay zekânla kendi programını kur. Hazır metni ChatGPT, Gemini ya da Claude'a ver, konuş, verdiği kodu yapıştır.",
+      "Uygulama programın biçimini, süresini ve aletlerini kontrol eder; aletin olmayan bir hareket varsa kurmadan önce söyler.",
+      "Bilgilerin bize gelmez: metni kendi yapay zekâna sen verirsin. İstediğin zaman uygulamanın programına dönebilirsin."
+    ]
+  },
+  {
     "v": "2026-10-08",
     "t": "Hareket canlandırmaları, geri tuşu desteği ve adım adım ısınma",
     "m": [

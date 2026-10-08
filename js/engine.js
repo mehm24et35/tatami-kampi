@@ -1036,7 +1036,102 @@ function reasons(P, A, S) {
 
 // ---------------- ana üretici ----------------
 // opts.prev: eski planın slot haritası (prevOf(gen)); verilirse hâlâ geçerli hareketler aynı slotta kalır (kayıt anahtarları bozulmaz)
+// ---------------- kişinin kendi yapay zekâsıyla kurduğu program (A.ai) ----------------
+// Kişi uygulamanın hazır metnini kendi yapay zekâsına verir, çıkan kodu yapıştırır (public.js › aiPrompt). Biçim:
+// { tatami: 1, ad, not, gunler: { pzt: { baslik, bloklar: [{ ad, isinma, hareketler: [{ id, recete, dinlenme, not }] }] } }, ozel: [{ id, ad, aciklama, tur }] }
+// recete: tek metin ya da [Faz 1, Faz 2, Faz 3]. generate: fazların seansları bu programdan; Hafta 0 ve test haftaları motorun kalıbıyla (alışma, test, hafif hafta).
+const AI_MAX = { blocks: 12, items: 15, ozel: 8, sets: 10, mins: 180 };
+const AI_T = { kg: "w", tekrar: "r", sure: "s" };
+const DAYN = {}; DAYS.forEach((d) => { DAYN[d.k] = d.n; });
+const isO = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+const aiWarm = (b) => b.isinma === true || /^(ısınma|isinma|soğuma|soguma)/.test(String(b.ad || "").toLocaleLowerCase("tr"));
+// Yapıştırılan metin ya da kayıtlı program → { ai: süzülmüş program, err: [kişiye/yapay zekâya söylenecek hatalar] }
+function aiCheck(v) {
+  const err = [], bad = (m) => { if (err.length < 8) err.push(m); };
+  let j = v;
+  if (typeof v === "string") {
+    const a = v.indexOf("{"), b = v.lastIndexOf("}");
+    try { j = a >= 0 && b > a ? JSON.parse(v.slice(a, b + 1)) : null; } catch (e) { j = null; }
+    if (!j) return { err: ["Kod okunamadı. Yapay zekânın verdiği kodun tamamını ({ ile başlayıp } ile biten kısmı) yapıştır; kod yarım kaldıysa yapay zekâna \"devam et\" de."] };
+  }
+  if (!isO(j) || !isO(j.gunler)) return { err: ["Bu bir Tatami Kampı programı değil: \"gunler\" bölümü yok."] };
+  const txt = (x, max) => (typeof x === "string" ? x.trim().slice(0, max) : typeof x === "number" ? String(x) : "");
+  const ozel = {};
+  (Array.isArray(j.ozel) ? j.ozel : []).forEach((o, i) => {
+    const id = isO(o) ? txt(o.id, 12) : "", ad = isO(o) ? txt(o.ad, 60) : "";
+    if (i >= AI_MAX.ozel) return bad("En fazla " + AI_MAX.ozel + " özel hareket olabilir.");
+    if (!/^ozel\d{1,2}$/.test(id) || ad.length < 2) return bad(i + 1 + ". özel hareket: id \"ozel1\" gibi olmalı, adı da yazılmalı.");
+    ozel[id] = { id, ad, aciklama: txt(o.aciklama, 400), tur: AI_T[o.tur] ? o.tur : "tekrar" };
+  });
+  const gun = {};
+  Object.keys(j.gunler).forEach((dk) => {
+    if (!DAYN[dk]) return bad("\"" + dk + "\" gün kodu değil; pzt, sal, car, per, cum, cmt, paz kullan.");
+    const g = j.gunler[dk], at = DAYN[dk];
+    if (!isO(g) || !Array.isArray(g.bloklar) || !g.bloklar.length) return bad(at + ": blok yok.");
+    if (g.bloklar.length > AI_MAX.blocks) return bad(at + ": en fazla " + AI_MAX.blocks + " blok olabilir.");
+    const bloklar = g.bloklar.map((b, bi) => {
+      const ad = (isO(b) && txt(b.ad, 60)) || bi + 1 + ". blok", w = at + " › " + ad, hs = isO(b) && Array.isArray(b.hareketler) ? b.hareketler : [];
+      if (!hs.length) bad(w + ": hareket yok.");
+      if (hs.length > AI_MAX.items) bad(w + ": en fazla " + AI_MAX.items + " hareket olabilir.");
+      const hareketler = hs.slice(0, AI_MAX.items).map((h, hi) => {
+        const id = isO(h) ? txt(h.id, 40) : "", ww = w + " › " + (hi + 1) + ". hareket";
+        if (!(EX[id] && !EX[id].ai) && !ozel[id]) bad(ww + ": \"" + id + "\" listede yok. Listeden bir kod seç ya da \"ozel\" bölümüne ekle.");
+        const r = (Array.isArray(h && h.recete) ? h.recete.slice(0, 3) : [h && h.recete]).map((x) => txt(x, 40).replace(/^(\d+)\s*[xX*]\s*/, "$1×"));
+        if (r.some((x) => !x)) bad(ww + ": reçete yok (ör. \"3×10\").");
+        if (r.some((x) => +(/^(\d+)\s*(?:set\s*|tur\s*)?×/.exec(x) || [0, 0])[1] > AI_MAX.sets)) bad(ww + ": en fazla " + AI_MAX.sets + " set olabilir.");
+        const o = { id, recete: r.length === 1 ? r[0] : r }, dn = isO(h) && h.dinlenme !== "" && h.dinlenme != null ? +h.dinlenme : NaN, n = isO(h) ? txt(h.not, 200) : "";
+        if (dn >= 0 && dn <= 600) o.dinlenme = Math.round(dn);
+        if (n) o.not = n;
+        return o;
+      });
+      return Object.assign({ ad, hareketler }, isO(b) && aiWarm(Object.assign({}, b, { ad })) ? { isinma: true } : {});
+    });
+    if (!bloklar[0].isinma) bad(at + ": ilk blok ısınma olmalı (\"isinma\": true).");
+    gun[dk] = { baslik: txt(g.baslik, 60) || "Antrenman", bloklar };
+  });
+  const gunler = {}; DAYS.forEach((d) => { if (gun[d.k]) gunler[d.k] = gun[d.k]; });
+  if (Object.keys(gunler).length < 2) bad("En az 2 antrenman günü olmalı.");
+  const ai = { tatami: 1, ad: txt(j.ad, 60) || "Yapay zekâ programı", not: txt(j.not, 300), gunler, ozel: Object.values(ozel) };
+  if (!err.length) { const W = aiWeek(ai, {}); Object.keys(W).forEach((dk) => { const m = Math.max.apply(null, W[dk].map((s) => estimate(s, 0))); if (m > AI_MAX.mins) bad(DAYN[dk] + " ~" + m + " dk sürüyor; " + AI_MAX.mins + " dakikayı geçmesin."); }); }
+  return { ai, err };
+}
+// Özel hareketler (listede olmayan) kütüphaneye eklenir: adı ve yapılışı yapay zekâdan, canlandırma ve alternatif yok.
+// ponytail: id'ler programlar arasında ortak (ozel1…); yeni program aynı id'yi başka harekete verirse eski kayıtlar yeni adla görünür.
+function aiLib(ai) {
+  (ai.ozel || []).forEach((o) => {
+    if (EX[o.id] && !EX[o.id].ai) return;
+    EX[o.id] = { id: o.id, ai: 1, n: o.ad, en: "", c: "ozel", d: "Yapay zekânın eklediği hareket; canlandırması yok.", s: o.aciklama ? [o.aciklama] : [], pat: [], eq: [["none"]], lv: [1, 3], st: {}, imp: 0, t: AI_T[o.tur] || "r", pr: 0, i: [], h: [], inj: {} };
+    LIB.CATS.ozel = "Yapay zekânın hareketleri";
+  });
+}
+// Program → { gün: [Faz 1, Faz 2, Faz 3 seansı] }. Kalıcı değiştirilen hareket (A.swap) yerine geçer, programdan çıkarılan (A.avoid) düşer; reçete yapay zekânınki kalır.
+function aiWeek(ai, A) {
+  const sw = A.swap || {}, av = new Set(A.avoid || []), oz = {}, W = {};
+  (ai.ozel || []).forEach((o) => { oz[o.id] = AI_T[o.tur] || "r"; });
+  Object.keys(ai.gunler).forEach((dk) => {
+    const g = ai.gunler[dk];
+    W[dk] = [0, 1, 2].map((pi) => {
+      let pri = 20; // sıradaki önem: hafif haftada ilk üç ana hareket kalır (testSession)
+      const blocks = g.bloklar.map((b) => {
+        const warm = aiWarm(b), items = b.hareketler.map((h) => {
+          const x = EX[sw[h.id]] ? sw[h.id] : h.id; if (x === h.id && av.has(x)) return null;
+          const ex = EX[x] || {}, p = Array.isArray(h.recete) ? h.recete[Math.min(pi, h.recete.length - 1)] : h.recete;
+          return { x, p, r: warm ? 0 : h.dinlenme != null ? h.dinlenme : 60, t: warm ? "x" : oz[x] || (/^[wrs]$/.test(ex.t) ? ex.t : "x"), s: maxSets(p), n: h.not || "", pri: warm ? 100 : Math.max(1, pri--) };
+        }).filter(Boolean);
+        return Object.assign({ name: b.ad, items }, warm ? { warm: true } : {});
+      }).filter((b) => b.items.length);
+      const s = { type: "ai", title: g.baslik, blocks, home: null };
+      s.dur = "~" + Math.max(5, Math.round(estimate(s, 0) / 5) * 5) + " dk";
+      return s;
+    });
+  });
+  return W;
+}
+
 function generate(A, opts) {
+  // Yapay zekâ programı: günler ondan; süre sınırı (test günü sığdırma) kişinin seçtiği süre ya da programın en uzun günü
+  const AI = A.ai && isO(A.ai.gunler) ? (aiLib(A.ai), aiWeek(A.ai, A)) : null;
+  if (AI) A = Object.assign({}, A, { days: Object.keys(AI), shortDays: [], mins: Math.min(AI_MAX.mins, Math.max.apply(null, [20, +A.mins || 0].concat(...Object.values(AI).map((ss) => ss.map((s) => estimate(s, 0)))))) });
   const P = profile(A), prev = (opts && opts.prev) || null;
   const prevSess = (ph, dk) => { if (!prev) return null; const pre = ph + "/" + dk + "/", o = {}; let n = 0; Object.keys(prev).forEach((k) => { if (k.startsWith(pre)) { o[k.slice(pre.length)] = prev[k]; n++; } }); return n ? o : null; };
   const seq = split(P);
@@ -1054,6 +1149,7 @@ function generate(A, opts) {
   ["F1", "F2", "F3"].forEach((ph, pi) => {
     P.days.forEach((dk) => { const [t, v] = dayType[dk]; const s = buildStable(t, v, PD[dk], pi, ord[dk], prevSess(ph, dk)); if (t === "fb") s.title = "Tüm Vücut " + "ABC"[fbDays.indexOf(dk)]; s.home = P.home ? (t === "fb" ? "ABC"[v] : HOME_OF[t] || null) : null; if (t === "sprint" && P.eq.has("outdoor")) s.alt = "Yağmur yağarsa içeride: duvar drili 4×5/bacak, yerinde diz çekerek sekme 3×20, " + (P.imp[pi] >= 1 ? "pogo 3×15, " : "") + "tempolu merdiven çıkma veya bisiklet 10 dk."; S[ph][dk] = s; });
   });
+  if (AI) PH.forEach((ph, pi) => P.days.forEach((dk) => { S[ph][dk] = AI[dk][pi]; }));
   // test/alışma haftaları: test grupları ilk üç antrenman gününe dağıtılır
   // Testler kısa güne konmaz (Ö6: 1,6 km testi tek başına ~16 dk); normal gün yoksa eski düzen
   const groupsForDay = {};
@@ -1085,17 +1181,17 @@ function generate(A, opts) {
   ];
   return {
     v: VERSION, created: new Date().toISOString().slice(0, 10),
-    summary: { reasons: reasons(P, A, S), L: P.L, levelName: ["", "Başlangıç", "Orta", "İleri"][P.L], cautious: P.cautious, bmi: Math.round(P.bmi * 10) / 10, days: P.days, mins: P.mins, goals: P.goals, scheme: P.scheme, types: P.days.map((dk) => dayType[dk][0]),
+    summary: { reasons: AI ? ["Bu programı kendi yapay zekânla kurdun; uygulama biçimini, süresini ve aletlerini denetledi. Hafta 0 alışma, 4, 8 ve 12. haftalar hafif hafta + test."] : reasons(P, A, S), ai: AI ? A.ai.ad : undefined, L: P.L, levelName: ["", "Başlangıç", "Orta", "İleri"][P.L], cautious: P.cautious, bmi: Math.round(P.bmi * 10) / 10, days: P.days, mins: P.mins, goals: P.goals, scheme: P.scheme, types: P.days.map((dk) => dayType[dk][0]),
       // Ağırlık önerisi için (src/tracker.html kgAdvice): en ağır dambıl (kg, bilinmiyorsa null), halter var mı, dambıl adımı / sabit çiftler listesi, bar ağırlığı ve adımı
       dbMax: P.dbMax, bar: P.eq.has("barbell"), dbStep: P.dbStep, dbList: P.dbList.length ? P.dbList : null, barKg: P.barKg, barStep: P.barStep, careful: careful(P),
       shortDays: Object.keys(P.short), eventWeek: P.evWeek },
     profile: { age: P.age, sex: P.sex, height: P.h, weight: P.w, goalWeight: P.goalW },
     DAYS: DAYS.map((d) => Object.assign({}, d, { train: P.days.includes(d.k) })),
-    S, ROUTINES: routines, TESTS: testList(P), PHASES: phases, RULES: rules(P), TARGETS: targets(P), NUTRITION: nutrition(P),
+    S, ROUTINES: routines, TESTS: testList(P), PHASES: AI ? phases.map((ph) => (/^F/.test(ph.key) ? Object.assign({}, ph, { rir: undefined, goal: "Yapay zekânla kurduğun program" + (ph.key === "F1" && A.ai.not ? ": " + A.ai.not : ".") }) : ph)) : phases, RULES: rules(P), TARGETS: targets(P), NUTRITION: nutrition(P),
   };
 }
 
-const api = { generate, prevOf, profile, candidates, swapOptions, swapItem, swapBlocked, expandEq, RM_MIN, RM_MAX, eqLegacy, GYM_EQ, GYM_DEFAULT, estimate, DAYS, GOALS, PARQ, VERSION, TEST_GROUPS, eventWeek, kgList };
+const api = { aiCheck, aiLib, generate, prevOf, profile, candidates, swapOptions, swapItem, swapBlocked, expandEq, RM_MIN, RM_MAX, eqLegacy, GYM_EQ, GYM_DEFAULT, estimate, DAYS, GOALS, PARQ, VERSION, TEST_GROUPS, eventWeek, kgList };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 else root.ENGINE = api;
 })(typeof window !== "undefined" ? window : globalThis);
