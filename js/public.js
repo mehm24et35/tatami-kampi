@@ -651,7 +651,7 @@ function aiSheet() {
   sheet("Yapay zekânla program", '<h2>Yapay zekânla program kur</h2><ol class="small" style="margin:8px 0 12px;padding-left:20px;display:grid;gap:4px">' +
     "<li>Hazır metni kopyala. İçinde cevapların ve uygulamadaki hareketler var.</li><li>ChatGPT, Gemini ya da Claude'a yapıştır. Eksik bir şey varsa sana sorar; istediğin kadar konuş.</li>" +
     "<li>Hazır olunca <b>programı yaz</b> de. Verdiği kodu kopyalayıp aşağıya yapıştır.</li></ol>" +
-    '<textarea id="txtOut" readonly aria-label="Yapay zekâya verilecek metin" style="min-height:64px;font-size:var(--fs-s)">' + esc(aiPrompt(ans)) + "</textarea>" +
+    '<textarea id="txtOut" readonly aria-label="Yapay zekâya verilecek metin" style="min-height:64px">' + esc(aiPrompt(ans)) + "</textarea>" + // 16 px: iPhone 16 px altı kutuya dokununca ekranı büyütür
     '<button class="btn ghost" style="width:100%;margin-top:6px;height:46px" data-act="copytxt">Hazır metni kopyala</button>' +
     '<textarea id="aiIn" aria-label="Yapay zekânın verdiği kod" aria-describedby="aiErr" style="min-height:110px;font-size:var(--fs-s);margin-top:16px" placeholder="Yapay zekânın verdiği kodu buraya yapıştır"></textarea><div id="aiErr" role="alert"></div>' +
     '<button class="btn" style="width:100%;margin-top:6px;height:46px" data-pub="aigo">Programı kontrol et</button>' +
@@ -851,7 +851,7 @@ document.addEventListener("click", (ev) => {
   if (a === "print") return printPlan();
   if (a === "privacy") return privacy();
   if (a === "paste") return sheet("Yedekten yükle", '<h2>Yedekten yükle</h2><p class="small muted">Sakladığın yedek metnini buraya yapıştır. Bu cihazdaki mevcut program ve kayıtların yerini alır.</p>' +
-    '<textarea id="pasteIn" aria-describedby="pasteErr" style="min-height:150px;font-size:var(--fs-s)" placeholder="{&quot;app&quot;:&quot;tatami-kampi&quot;…"></textarea><p class="wz-err" id="pasteErr" role="alert"></p><button class="btn" style="width:100%;margin-top:4px;height:46px" data-pub="pastego">Yükle</button>');
+    '<textarea id="pasteIn" aria-describedby="pasteErr" style="min-height:150px" placeholder="{&quot;app&quot;:&quot;tatami-kampi&quot;…"></textarea><p class="wz-err" id="pasteErr" role="alert"></p><button class="btn" style="width:100%;margin-top:4px;height:46px" data-pub="pastego">Yükle</button>');
   if (a === "pastego") { const ta = $("#pasteIn"); if (ta && ta.value.trim()) restoreText(ta.value.trim()); else restoreErr("Önce yedek metnini kutuya yapıştır."); return; }
   if (a === "restorego") return restoreGo();
   if (a === "restoreundo") return restoreUndo();
@@ -1157,10 +1157,15 @@ function eqSheet() {
 }
 // Alternatif hareket (tracker.html › altSheet): motorun ikame listesi, "sadece bugün" maddesi ve kalıcı değişiklik
 const ALTM = {};
-window.TK_ALTS = (id, pi) => { // pi: faz sırası (darbe sınırı faza göre); liste faz başına önbelleklenir
-  const key = id + "/" + (pi || 0); if (ALTM[key]) return ALTM[key];
-  const ans = load(KEY_ANS), ex = LIB.EX[id]; if (!ans || !ex) return [];
-  return (ALTM[key] = okAlts(id, E.profile(ans), pi).slice(0, 3).map((e) => ({ id: e.id, why: e.pat.includes(ex.pat[0]) ? "aynı kalıp" : e.eq.some((a) => ex.eq.some((b) => a.join() === b.join())) ? "aynı alet" : "" })));
+window.TK_ALTS = (id, pi, skip) => { // pi: faz sırası (darbe sınırı faza göre); tam liste faz başına önbelleklenir. skip: o günkü seansta zaten olan hareketler (önerilmez), ilk 3 ondan sonra seçilir
+  const key = id + "/" + (pi || 0);
+  if (!ALTM[key]) {
+    const ans = load(KEY_ANS), ex = LIB.EX[id]; if (!ans || !ex) return [];
+    // why: seviye farkı (daha kolay / daha zor; zorlanan kişi kolayını görsün) + benzerlik (aynı kalıp / aynı alet)
+    ALTM[key] = okAlts(id, E.profile(ans), pi).map((e) => ({ id: e.id, why: [e.lv[0] < ex.lv[0] ? "daha kolay" : e.lv[0] > ex.lv[0] ? "daha zor" : "", e.pat.includes(ex.pat[0]) ? "aynı kalıp" : e.eq.some((a) => ex.eq.some((b) => a.join() === b.join())) ? "aynı alet" : ""].filter(Boolean).join(" · ") }));
+  }
+  const f = ALTM[key].filter((a) => !(skip || []).includes(a.id));
+  return (f.length ? f : ALTM[key]).slice(0, 3); // hepsi o gün zaten varsa yine de seçenek sunulur (Alternatif düğmesi yok olmasın)
 };
 // Motorun kalıcı değişikliğe izin vermediği hareket (alet, kaçınma, sakatlık, darbe…) listeye hiç girmez: listedeki her seçenek hem "Sadece bugün" hem "Kalıcı" seçilebilir
 const okAlts = (id, P, pi) => E.swapOptions(id, P, pi).filter((e) => !E.swapBlocked(e.id, P, pi));

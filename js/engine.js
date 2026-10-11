@@ -285,7 +285,11 @@ function swapBlocked(id, P, pi) {
 // pi: faz sırası (0 = Faz 1 ve alışma, 1 = Faz 2 ve test, 2 = Faz 3). Döner: yeni madde ya da null.
 function swapItem(it, id, P, pi) {
   const ex = EX[id]; if (!ex || !it) return null;
-  if (it.t === "x") return Object.assign({}, it, { x: id, n: "" });
+  if (it.t === "x") { // yazım birimi yeni hareketin türüne uymuyorsa düzelir: tekrar maddesi tutuşa "30 sn", süreli tek madde tekrara "10"; aralık/raunt/süre reçetesi (kondisyon, z2) korunur
+    const s0 = String(Array.isArray(it.p) ? it.p[0] : it.p), s = s0.replace("/taraf", "").trim(), timed = /\b(sn|dk)\b/.test(s), iv = /tur|EMOM|Tabata|\//.test(s), side = ex.uni ? "/taraf" : "";
+    const p = iv ? null : ex.t === "s" && !timed ? "30 sn" + side : (ex.t === "r" || ex.t === "w") && timed ? "10" + side : !Array.isArray(it.p) && s + side !== s0 ? s + side : null; // taraf eki yeni harekete göre
+    return Object.assign({}, it, { x: id, n: "" }, p ? { p } : {});
+  }
   const kind = ex.pat.includes("box_pow") ? "boxpow" : ex.pat.includes("rot") ? "rot" : it.pri >= 10 ? "main" : it.pri >= 8 ? "sec" : "acc";
   const rx = prescribe(ex, kind, P, pi || 0, {});
   const out = { x: id, p: rx.p, r: rx.r || 0, t: ex.t === "w" ? (loaded(ex, P) ? "w" : "r") : ex.t === "r" || ex.t === "s" ? ex.t : "x", s: maxSets(rx.p), n: rx.n || "", pri: it.pri };

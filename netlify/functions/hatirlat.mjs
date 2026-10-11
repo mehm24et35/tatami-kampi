@@ -2,7 +2,7 @@
 // Gider: hatırlatma açık (remind), saat eşleşiyor, gün antrenman günü, hafta ara haftası değil ve o gün daha önce gitmemiş (lastRemind).
 // Yalnız zamanlayıcı çağırır (adresle çağrılamaz). Elle: netlify functions:invoke hatirlat (netlify dev açıkken).
 import { getStore } from "@netlify/blobs";
-import { sendTo, vapid } from "./push.mjs";
+import { sendTo, vapid, BATCH } from "./push.mjs";
 
 export const config = { schedule: "0 * * * *" };
 
@@ -25,13 +25,15 @@ export function due(rec, now) {
 // Tüm aboneleri tara; store ve gönderici test için dışarıdan verilebilir
 export async function run(store, now, send = sendTo) {
   const { blobs } = await store.list(), n = { sent: 0, gone: 0, failed: 0 };
-  // ponytail: hepsi aynı anda (push.mjs ile aynı sınır); hatırlatma 4 saat içinde ulaşmazsa düşer (TTL)
-  await Promise.all(blobs.map(async ({ key }) => {
-    const s = await store.get(key, { type: "json" }), d = s && due(s, now); if (!d) return;
-    const res = await send(store, key, s, JSON.stringify(TEXT), 4 * 3600);
-    if (res === "sent") await store.setJSON(key, { ...s, lastRemind: d });
-    n[res]++;
-  }));
+  // BATCH'lik gruplarla (push.mjs ile aynı): binlerce aboneye aynı anda vurup ağ hatasıyla kayıt sildirmemek için; hatırlatma 4 saat içinde ulaşmazsa düşer (TTL)
+  for (let i = 0; i < blobs.length; i += BATCH) {
+    await Promise.all(blobs.slice(i, i + BATCH).map(async ({ key }) => {
+      const s = await store.get(key, { type: "json" }), d = s && due(s, now); if (!d) return;
+      const res = await send(store, key, s, JSON.stringify(TEXT), 4 * 3600);
+      if (res === "sent") await store.setJSON(key, { ...s, lastRemind: d });
+      n[res]++;
+    }));
+  }
   return { total: blobs.length, ...n };
 }
 export default async () => {

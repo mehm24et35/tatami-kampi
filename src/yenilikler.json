@@ -1,5 +1,17 @@
 [
   {
+    "v": "2026-10-11",
+    "t": "Küçük düzeltmeler: iPhone'da sayaç sesi, koyu temada açılış, daha akıcı arama",
+    "m": [
+      "iPhone'da dinlenme ve set sayaçlarının bip sesi ilk seanstan itibaren duyulur (ses, sayacı başlatan dokunuşla açılır).",
+      "Koyu temada uygulama açılırken üstteki durum çubuğu beyaz yanıp sönmüyor.",
+      "Hareketler ekranında arama yazarken yalnız liste süzülüyor; kutu, klavye ve imleç yerinde kalıyor.",
+      "Antrenman modu kapanınca hareket canlandırması arka planda çalışmaya devam etmiyor; pil ve işlemci boşa harcanmıyor.",
+      "Yapay zekâ ve yedek metin kutularına iPhone'da dokununca ekran büyümüyor.",
+      "Alternatif seçince reçete yeni harekete göre gelir: süreli hareketse sayaç, ağırlıklıysa kilo kutusu. Listede seçeneğin yanında \"daha kolay\" ya da \"daha zor\" yazar."
+    ]
+  },
+  {
     "v": "2026-10-08c",
     "t": "Antrenman ekranı sadeleşti; yapay zekâyla program artık Bugün ekranında",
     "m": [

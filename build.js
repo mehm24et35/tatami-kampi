@@ -30,23 +30,27 @@ const head = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Seviyene, aletlerine, zamanına ve sakatlıklarına göre kişisel antrenman programı. Adım adım antrenman modu, sayaçlar, testler. Veriler sadece cihazında.">
-<meta name="theme-color" content="#FFFFFF">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141416" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tatami">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<style>[hidden]{display:none!important}body{margin:0}</style>
 </head>
 <body>
 `;
+// tracker.html'in başı (<title>, tema betiği, yazı tipi, <style>) <head>'e girer; gövde içeriği <body>'ye. Koyu temada durum çubuğu meta'sı (üstte, medya sorgulu) ilk boyadan önce doğru renkte; applyTheme sonra teke indirir.
+const CUT = tracker.indexOf("</style>") + "</style>".length;
+const trHead = tracker.slice(0, CUT), trBody = tracker.slice(CUT);
 // Android uygulaması: TK_REL = sürüm numarası (GitHub Actions'ta etiketten, v12 → "12"); TK_REPO = APK'ların indiği GitHub deposu
 const WEB_JS = ["lib.js", "engine.js", "anim.js", "public.js"]; // anim.js (hareket canlandırmaları) yalnız web / Android sürümünde
 const REPO = process.env.TK_REPO || "mehm24et35/tatami-kampi", REL = (process.env.TK_REL || "").replace(/\D/g, "");
 const scripts = "window.TK_NEWS = " + NEWS + "; window.TK_PUSH_KEY = " + JSON.stringify(PUSH.publicKey || "") + "; window.TK_REPO = " + JSON.stringify(REPO) + "; window.TK_REL = " + JSON.stringify(REL) + ";\n" +
   "</script>" + WEB_JS.map((f) => '<script src="js/' + f + "?v=" + BUILD + '"></script>').join("") + "<script>";
-write("dist/web/index.html", head + withFonts(tracker, LOCAL_FONTS).replace("/*__DATA__*/", () => scripts) + "\n</body>\n</html>\n");
+write("dist/web/index.html", head.replace("</head>", withFonts(trHead, LOCAL_FONTS) + "\n</head>") + trBody.replace("/*__DATA__*/", () => scripts) + "\n</body>\n</html>\n");
 WEB_JS.forEach((f) => write("dist/web/js/" + f, read("js/" + f)));
 write("dist/web/manifest.webmanifest", JSON.stringify({
   name: "Tatami Kampı", short_name: "Tatami", description: "Kişisel antrenman programı ve adım adım antrenman modu",
@@ -75,6 +79,9 @@ const html = read("dist/web/index.html");
 const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => "'sha256-" + crypto.createHash("sha256").update(m[1]).digest("base64") + "'");
 const CSP = ["default-src 'self'", "script-src 'self' " + hashes.join(" "), "style-src 'self' 'unsafe-inline'" + (LOCAL_FONTS ? "" : " https://fonts.googleapis.com"), "font-src 'self'" + (LOCAL_FONTS ? "" : " https://fonts.gstatic.com"),
   "img-src 'self' data:", "connect-src 'self'", "manifest-src 'self'", "worker-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
+// Önbellek: js/ adresleri derleme damgalı (?v=) → 1 yıl değişmez; fonts/ ve icons/ damgasız → 30 gün (değişirse en geç bir ayda yenilenir; çevrimdışı asıl kopya service worker'da)
 write("dist/web/_headers", ["/*", "  X-Content-Type-Options: nosniff", "  Referrer-Policy: strict-origin-when-cross-origin", "  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()", "  X-Frame-Options: DENY",
-  "/", "  Cache-Control: no-cache", "  Content-Security-Policy: " + CSP, "/index.html", "  Cache-Control: no-cache", "  Content-Security-Policy: " + CSP, "/sw.js", "  Cache-Control: no-cache", ""].join("\n"));
+  "  Strict-Transport-Security: max-age=31536000; includeSubDomains",
+  "/", "  Cache-Control: no-cache", "  Content-Security-Policy: " + CSP, "/index.html", "  Cache-Control: no-cache", "  Content-Security-Policy: " + CSP, "/sw.js", "  Cache-Control: no-cache",
+  "/js/*", "  Cache-Control: public, max-age=31536000, immutable", "/fonts/*", "  Cache-Control: public, max-age=2592000", "/icons/*", "  Cache-Control: public, max-age=2592000", ""].join("\n"));
 console.log("derlendi:", BUILD, REL ? "· sürüm " + REL : "", "· public-artifact.html", fs.statSync(R("dist/public-artifact.html")).size, "bayt · web/index.html", fs.statSync(R("dist/web/index.html")).size, "bayt");

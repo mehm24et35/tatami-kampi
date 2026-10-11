@@ -38,6 +38,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{background:var(--bg)}
+html{-webkit-text-size-adjust:100%} /* iPhone yatayda yazıyı kendiliğinden büyütmesin */
 body{margin:0;color:var(--ink);font:var(--fs-m)/1.45 var(--body);-webkit-font-smoothing:antialiased;padding-inline:16px;padding-block:env(safe-area-inset-top,0px) 132px}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -925,6 +926,8 @@ function phaseName(key) { const p = P.PHASES.find((x) => x.key === key); return 
 
 // ---------------- audio / vibration ----------------
 let AC = null;
+// iOS ses bağlamını yalnız dokunuş içinde açar: sayacı başlatan dokunuşta (set ✓, Başlat, Antrenmanı başlat) çağrılır ki sonradan sayaçtan gelen bip (dokunuşsuz) sessiz kalmasın
+function unlockAudio() { try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume().catch(() => {}); } catch (e) {} }
 function beep(freq, dur, vol) {
   try {
     if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -937,10 +940,11 @@ function beep(freq, dur, vol) {
 }
 function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
 let wakeLock = null;
+const wakeNeeded = () => !$("#player").hidden || !!Rest.iv || !!SW.iv || T.run; // biri hâlâ çalışıyorsa (dinlenme biterken aralık sayacı sürüyor gibi) ekran kilidi bırakılmaz
 async function keepAwake(on) {
   try {
     if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); }
-    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    if (!on && wakeLock && !wakeNeeded()) { await wakeLock.release(); wakeLock = null; }
   } catch (e) { wakeLock = null; }
 }
 
@@ -948,7 +952,7 @@ async function keepAwake(on) {
 const Rest = {
   end: 0, iv: null, label: "",
   start(sec, label) {
-    this.end = Date.now() + sec * 1000; this.label = label || ""; this._lastBeep = null;
+    this.end = Date.now() + sec * 1000; this.label = label || ""; this._lastBeep = null; unlockAudio();
     $("#restL").textContent = "Dinlenme · " + this.label;
     const bar = $("#restbar"); bar.hidden = false; bar.classList.remove("done");
     clearInterval(this.iv); this.iv = setInterval(() => this.tick(), 250); this.tick(); keepAwake(true);
@@ -1020,8 +1024,9 @@ function applyTheme(v) {
   if (v !== undefined) { try { if (v) localStorage.setItem("tk_theme", v); else localStorage.removeItem("tk_theme"); } catch (e) {} }
   const t = themeNow(), root = document.documentElement;
   if (t) root.dataset.theme = t; else delete root.dataset.theme;
-  let m = document.querySelector('meta[name="theme-color"]');
+  const ms = document.querySelectorAll('meta[name="theme-color"]'); let m = ms[0];
   if (!m) { m = document.createElement("meta"); m.name = "theme-color"; document.head.appendChild(m); }
+  else { ms.forEach((x, i) => { if (i) x.remove(); }); m.removeAttribute("media"); } // açılıştaki açık/koyu çift meta (build.js) tek metaya iner; seçilen tema sistemden bağımsız geçerli
   m.content = getComputedStyle(root).getPropertyValue("--bg").trim();
 }
 
@@ -1292,7 +1297,7 @@ function itemHTML(it, k, wi, open, extra) {
   const tg = target(rx);
   const iv = parseInterval(rx, it);
   h += '<div class="i-body"><div class="i-acts"><button class="btn ghost sm" data-act="ex" data-v="' + esc(it.x) + '">Nasıl yapılır?</button>' +
-    (!/^f/.test(k) && altsOf(it.x, piOf(ctx(state.date).ph.key)).length ? '<button class="btn ghost sm" data-act="alt" data-k="' + k + '">Alternatif</button>' : "") +
+    (!/^f/.test(k) && altsOf(it.x, piOf(ctx(state.date).ph.key), dayIds(state.date)).length ? '<button class="btn ghost sm" data-act="alt" data-k="' + k + '">Alternatif</button>' : "") +
     (it.r ? '<button class="btn ghost sm" data-act="rest" data-k="' + k + '">Dinlenme ' + fmtSec(it.r) + "</button>" : "") +
     (iv ? '<button class="btn ghost sm" data-act="tset" data-k="' + k + '">Sayaçta aç · ' + (iv.k === 1 ? Math.round(iv.w / 60) + " dk" : iv.k + " × " + fmtSec(iv.w) + (iv.r ? " / " + fmtSec(iv.r) : " (her dakika)")) + "</button>" : "") + "</div>" +
     (it.n ? '<p class="i-note">' + esc(it.n) + "</p>" : "");
@@ -1335,7 +1340,7 @@ const SW = { k: null, i: null, date: null, t0: 0, iv: null, goal: 0, beeped: fal
 const HOLD_MAX = 600;
 function swStop(save) {
   if (!SW.iv) return;
-  clearInterval(SW.iv); SW.iv = null;
+  clearInterval(SW.iv); SW.iv = null; keepAwake(false);
   const sec = Math.min(HOLD_MAX, Math.max(0, Math.round((Date.now() - SW.t0) / 1000)));
   const k = SW.k, i = SW.i, date = SW.date; SW.k = SW.i = SW.date = null;
   if (!save || date !== state.date) return;
@@ -1376,7 +1381,7 @@ function swStart(k, i) {
     if (el) el.value = sec;
     if (SW.goal && sec >= SW.goal && !SW.beeped) { SW.beeped = true; beep(990, 0.5, 0.12); buzz([150, 80, 150]); }
   }, 200);
-  keepAwake(true);
+  keepAwake(true); unlockAudio();
   const y = window.scrollY; render(); window.scrollTo(0, y);
 }
 
@@ -1392,12 +1397,16 @@ function planItem(k) { const c = ctx(state.date), [bi, ii] = k.split("-").map(Nu
 // ---------------- program dışı kayıt: serbest hareketler ve aktiviteler ----------------
 const ACTS = { yuruyus: "Yürüyüş", kosu: "Koşu", bisiklet: "Bisiklet", yuzme: "Yüzme", takim: "Futbol / takım sporu", dovus: "Dövüş antrenmanı", yoga: "Yoga / esneme", diger: "Diğer" };
 // Hareketin kayıt türü (kilo/tekrar/süre): tanımda yoksa programda nasıl kullanıldığından
-let TYPE_OF = null;
-function exType(x) {
-  const e = P.EX[x] || {}; if (["w", "r", "s"].includes(e.t)) return e.t;
-  if (!TYPE_OF) { TYPE_OF = {}; Object.values(P.S || {}).forEach((ph) => Object.values(ph || {}).forEach((s) => ((s && s.blocks) || []).forEach((b) => (b.items || []).forEach((it) => { if (["w", "r", "s"].includes(it.t) && !TYPE_OF[it.x]) TYPE_OF[it.x] = it.t; })))); }
-  return TYPE_OF[x] || "r";
+let TYPE_OF = null, UNI_OF = null;
+function exScan() { // programdaki kullanımdan: hareketin kayıt türü ve tek taraflı (/taraf) yazılıp yazılmadığı (kişisel kütüphanede t/uni alanı yok)
+  if (TYPE_OF) return; TYPE_OF = {}; UNI_OF = {};
+  Object.values(P.S || {}).forEach((ph) => Object.values(ph || {}).forEach((s) => ((s && s.blocks) || []).forEach((b) => (b.items || []).forEach((it) => {
+    if (["w", "r", "s"].includes(it.t) && !TYPE_OF[it.x]) TYPE_OF[it.x] = it.t;
+    if (!(it.x in UNI_OF)) UNI_OF[it.x] = /\/taraf/.test(String(it.p));
+  }))));
 }
+function exType(x) { const e = P.EX[x] || {}; if (["w", "r", "s"].includes(e.t)) return e.t; exScan(); return TYPE_OF[x] || "r"; }
+function exUni(x) { const e = P.EX[x] || {}; if (typeof e.uni === "boolean") return e.uni; exScan(); return UNI_OF[x]; } // true/false; programda hiç yoksa undefined
 function freeItem(x, I) { return { x, t: exType(x), p: "", r: 0, s: Math.max(3, (I && I.n) || 0, ((I && I.sets) || []).length) }; }
 function freeHTML(wi) {
   const L = logDoc(state.date), fr = (L && L.free) || [], acts = (L && L.acts) || [];
@@ -1507,9 +1516,14 @@ const PAT_N = { hpush: "Yatay itiş", vpush: "Dikey itiş", hpull: "Yatay çeki�
   grip: "Kavrama", carry: "Taşıma", cond: "Kondisyon", z2: "Aerobik taban", plyo: "Sıçrama", sprint: "Sprint", sprint_drill: "Sprint drili", skill_hs: "Amut becerisi", box_pow: "Yumruk gücü", box_round: "Raunt", rot: "Dönüş" };
 function libRows(list) { return '<ul class="lib">' + list.map((id) => '<li><button data-act="ex" data-v="' + id + '"><span><b>' + esc(P.EX[id].n) + "</b><small>" + esc(P.EX[id].en) + "</small></span></button></li>").join("") + "</ul>"; }
 function vHareket() {
-  const q = fold(state.libQ.trim());
-  let h = '<h1 class="section-title">Hareketler</h1>';
-  h += '<input class="search" id="libq" type="search" placeholder="Ara: barfiks, spagat, torba…" value="' + esc(state.libQ) + '" aria-label="Hareket ara" style="margin-bottom:16px">';
+  return '<h1 class="section-title">Hareketler</h1>' +
+    '<input class="search" id="libq" type="search" placeholder="Ara: barfiks, spagat, torba…" value="' + esc(state.libQ) + '" aria-label="Hareket ara" style="margin-bottom:16px" autocomplete="off">' +
+    '<div id="libres">' + libListHTML(state.libQ) + "</div>";
+}
+// Arama sonucu listesi: yazarken yalnız bu bölüm yenilenir (bütün ekran çizilip odak ve imleç geri konmaz)
+function libListHTML(query) {
+  const q = fold(query.trim());
+  let h = "";
   const ids = Object.keys(P.EX).filter((id) => { const e = P.EX[id]; return !q || fold(e.n + " " + e.en + " " + e.d).includes(q); });
   const byName = (a, b) => P.EX[a].n.localeCompare(P.EX[b].n, "tr");
   Object.keys(P.CATS).forEach((c) => {
@@ -1982,12 +1996,15 @@ window.TK_SHEET_OPEN = sheetOpen;
 // Liste: web'de motor (TK_ALTS: aletine ve sakatlığına uygun ilk 3), kişisel sürümde PLAN.ALT (personal/data.js, { id: [id, …] }); boşsa düğme çıkmaz.
 // pi: faz sırası (0 = Faz 1 ve alışma, 1 = Faz 2 ve test, 2 = Faz 3); motorun darbe sınırı o faza göre
 const piOf = (phKey) => ({ F2: 1, T: 1, F3: 2 }[phKey] || 0);
-function altsOf(x, pi) {
-  if (window.TK_ALTS) return window.TK_ALTS(x, pi);
-  return ((P.ALT || {})[x] || []).filter((id) => P.EX[id]).map((id) => ({ id, why: "" }));
+// skip: o günkü seansta zaten olan hareketler önerilmez (ısınmadaki hareket ana bloğa "alternatif" diye çıkmasın; aynı hareket iki kez yapılmaz)
+const dayIds = (date) => itemsOf(ctx(date).sess).map((o) => o.it.x);
+function altsOf(x, pi, skip) {
+  if (window.TK_ALTS) return window.TK_ALTS(x, pi, skip);
+  const all = ((P.ALT || {})[x] || []).filter((id) => P.EX[id]), f = all.filter((id) => !(skip || []).includes(id));
+  return (f.length ? f : all).map((id) => ({ id, why: "" })); // hepsi o gün zaten varsa yine de seçenek sunulur (düğme yok olmasın)
 }
 function altSheet(k) {
-  const { c, it } = findItem(k), e = P.EX[it.x] || { n: it.x }, alts = altsOf(it.x, piOf(c.ph.key));
+  const { c, it } = findItem(k), e = P.EX[it.x] || { n: it.x }, alts = altsOf(it.x, piOf(c.ph.key), dayIds(state.date));
   sheetHTML("Alternatif", '<div class="eyebrow">Alternatif</div><h2>' + esc(e.n) + " yerine</h2>" +
     (alts.length ? '<ul class="lib" style="margin-top:12px;border-top:1px solid var(--line)">' + alts.map((a) => { const x = P.EX[a.id]; return '<li><button data-act="altpick" data-k="' + k + '" data-v="' + a.id + '"><span><b>' + esc(x.n) + "</b><small>" + esc(x.en || "") + (a.why ? " · " + esc(a.why) : "") + "</small></span></button></li>"; }).join("") + "</ul>"
       : '<p style="margin:12px 0 0">Aletlerine ve sakatlıklarına uygun başka seçenek bulamadım. Hareketi hafifletebilir ya da atlayabilirsin.</p>'));
@@ -1995,7 +2012,7 @@ function altSheet(k) {
 // Sadece bugün: günün kaydına swap[k] yazılır (ctx bunu uygular), eski kayıt k~x'e taşınır, yeni hareket sıfırdan başlar; plan değişmez
 function altToday(k, id) {
   const { c, it } = findItem(k), pi = piOf(c.ph.key), date = state.date, oldX = it.x;
-  const nu = window.TK_SWAP_ITEM ? window.TK_SWAP_ITEM(it, id, pi) : Object.assign({}, it, { x: id, n: "" });
+  const nu = window.TK_SWAP_ITEM ? window.TK_SWAP_ITEM(it, id, pi) : retypeItem(it, id);
   if (!nu) { toast("Bu hareket bugün için uyarlanamadı."); return; }
   const L = logDoc(date, true), hadSwap = L.swap && L.swap[k]; L.swap = Object.assign({}, L.swap, { [k]: nu });
   itemLog(date, k, id, true); if (!Store.put("logs", date)) return;
@@ -2019,6 +2036,20 @@ function altPerm(k, id) {
   closeSheet(); altRefresh(id);
   toast("Programda " + (P.EX[orig.x] || {}).n + " yerine " + (P.EX[id] || {}).n, () => { if (undo()) altRefresh(orig.x); });
 }
+// Kişisel sürüm (motor yok; web'de TK_SWAP_ITEM yazar): alternatifin kayıt türü yeni hareketten (exType). Tür değişiyorsa reçete de ona göre:
+// tutuşa geçince "3×30 sn" (sayaç gelir), tekrara geçince "3×8-12", ağırlıklıya geçince kg kutusu; ısınma/işaret maddesi (x) tek ✓ kalır, yalnız yazımı düzelir ("30 sn" / "10").
+function retypeItem(it, id) {
+  const t = exType(id), x = it.t === "x", u = exUni(id);
+  const conv = (p) => {
+    const s0 = String(p == null ? "" : p), had = /\/taraf/.test(s0), s = s0.replace("/taraf", "").trim();
+    const side = u === true ? "/taraf" : u === false ? "" : had ? "/taraf" : ""; // yeni hareket tek taraflıysa /taraf (programdaki yazımından; bilinmiyorsa eskisi kalır)
+    const m = /^(\d+)\s*[×x]/.exec(s), sets = m ? m[1] + "×" : x ? "" : "3×", timed = /\b(sn|dk)\b/.test(s), iv = /tur|EMOM|Tabata|\//.test(s);
+    if (t === "s" && !timed && !iv) return sets + "30 sn" + side;
+    if ((t === "r" || t === "w") && (it.t === "s" || timed) && !iv) return sets + (x ? "10" : "8-12") + side;
+    return iv ? s0 : s + side; // aralık/raunt yazımı olduğu gibi; diğerlerinde yalnız taraf eki düzelir
+  };
+  return Object.assign({}, it, { x: id, n: "", t: x ? "x" : t, p: Array.isArray(it.p) ? it.p.map(conv) : conv(it.p) });
+}
 function altRefresh(id) {
   if ($("#player").hidden) return rerender();
   PL.steps = plBuild(PL.date);
@@ -2028,7 +2059,7 @@ function altRefresh(id) {
 function textSheet(name, data) {
   sheetOpen('<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(name) + '"><button class="iconbtn x" data-act="close" aria-label="Kapat">×</button>' +
     "<h2>" + esc(name) + '</h2><p class="small muted">Bu görünümde dosya indirilemiyor. Metni kopyala; Notlar\'a ya da kendine mesaj olarak yapıştırıp sakla.</p>' +
-    '<textarea id="txtOut" readonly aria-label="Yedek metni" style="min-height:150px;font-size:var(--fs-s)">' + esc(data) + '</textarea><button class="btn" style="width:100%;margin-top:10px;height:46px" data-act="copytxt">Kopyala</button></div></div>');
+    '<textarea id="txtOut" readonly aria-label="Yedek metni" style="min-height:150px">' + esc(data) + '</textarea><button class="btn" style="width:100%;margin-top:10px;height:46px" data-act="copytxt">Kopyala</button></div></div>');
 }
 function histHTML(id) {
   const H = history(id, 8); if (!H.length) return "";
@@ -2124,7 +2155,7 @@ document.addEventListener("focusout", () => { if (deferred) setTimeout(() => { c
 
 // Uzun aradan sonra: aradaki kayıtsız haftaları ara haftası sayıp kaldığı yerden devam ettir
 function catchupHTML() {
-  const days = Object.keys(state.logs).filter((d) => progress(d) && progress(d).done).sort(); if (!days.length) return "";
+  const days = Object.keys(state.logs).filter((d) => { const p = progress(d); return p && p.done; }).sort(); if (!days.length) return "";
   const lastRaw = rawWeek(parseISO(days[days.length - 1])), nowRaw = rawWeek(new Date()), ps = pausedRaw();
   const miss = []; for (let r = lastRaw + 1; r < nowRaw; r++) if (!ps.includes(r)) miss.push(r);
   if (miss.length < 1 || lastRaw < 0 || nowRaw - lastRaw < 2 || weekOfDate(new Date()) > 12) return "";
@@ -2318,7 +2349,7 @@ document.addEventListener("input", (ev) => {
   if (el.id === "freeq") { const r = $("#freeres"); if (r) r.innerHTML = freeResults(el.value); return; }
   if (el.id === "caltime") { state.settings.calTime = el.value || "07:00"; Store.put("settings", "main"); const a = $("#gcal"); if (a) a.href = gcalLink(state.settings.calTime); return; }
   if (el.dataset && el.dataset.test) { testInput(el, state.testDate || todayISO()); return; }
-  if (el.id === "libq") { state.libQ = el.value; const pos = el.selectionStart; render(); const n = $("#libq"); n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} return; }
+  if (el.id === "libq") { state.libQ = el.value; const r = $("#libres"); if (r) r.innerHTML = libListHTML(el.value); return; } // yalnız liste yenilenir; kutu ve klavye yerinde kalır
   if (el.id === "tw" || el.id === "tr" || el.id === "tk") { // üst sınırlar: iş/dinlenme 1 saat, 99 tur
     const w = Math.min(3600, Math.max(5, parseInt($("#tw").value) || 0)), r = Math.min(3600, Math.max(0, parseInt($("#tr").value) || 0)), k = Math.min(99, Math.max(1, parseInt($("#tk").value) || 0));
     if (!T.run) { T.p = { id: "ozel", n: "Özel", w, r, k }; T.phase = "idle"; tPaint(); document.querySelectorAll(".presets button").forEach((b) => b.classList.toggle("on", b.dataset.v === "ozel")); }
@@ -2447,7 +2478,7 @@ function plShow() {
   Rest.stop(); if (SW.iv) swStop(false);
   if ($("#player").hidden) PL.from = document.activeElement; // kapanınca odak buraya döner
   $("#player").hidden = false; document.body.style.overflow = "hidden"; setInert(true);
-  keepAwake(true);
+  keepAwake(true); unlockAudio();
   clearInterval(PL.tick); PL.tick = setInterval(() => { try { plTick(); plRing(); } catch (err) { console.error(err); } }, 200);
   PL.kgAsked = {};
 }
@@ -2490,14 +2521,14 @@ function plOpen(date) {
   const wi = plWi(), first = PL.steps.findIndex((st) => st.kind !== "end" && !plStepDone(st, wi));
   PL.i = first < 0 ? PL.steps.length - 1 : first;
   PL.mode = "step"; PL.rest = PL.hold = PL.iv = PL.draft = PL.ready = PL.edit = null;
-  const L = logDoc(date, true); if (!L.start) { L.start = new Date().toISOString(); Store.put("logs", date); }
+  const L = logDoc(date, true); if (!L.start && PL.i < PL.steps.length - 1) { L.start = new Date().toISOString(); Store.put("logs", date); } // bitmiş günün özeti açılırken başlangıç damgalanmaz (süre "1 dk" görünmesin)
   plShow(); plRender();
 }
 function plClose() {
   clearInterval(PL.tick); PL.tick = null;
   const restLeft = PL.rest ? (PL.rest.end - Date.now()) / 1000 : 0;
   PL.rest = PL.hold = PL.iv = PL.draft = PL.edit = null; PL.mode = "step";
-  $("#player").hidden = true; document.body.style.overflow = ""; setInert(false);
+  $("#player").hidden = true; $("#player").innerHTML = ""; document.body.style.overflow = ""; setInert(false); // içerik boşalır: gizli ekrandaki canlandırma döngüsü (anim.js) boşuna çalışmasın
   keepAwake(false); render();
   const f = PL.from; PL.from = null; if (f && f.isConnected && f.focus) f.focus({ preventScroll: true });
   if (restLeft > 1) Rest.start(restLeft, "Antrenman");
@@ -2785,9 +2816,9 @@ function plRender() {
     '<b class="num">Adım ' + (PL.i + 1) + " / " + PL.steps.length + (sc ? " · " + sc[0] + " / " + sc[1] + " " + sc[2] : "") + "</b></div>" + (isR ? "" : '<span class="el" id="plElapsed" aria-label="Geçen süre">' + plElapsed() + "</span>") + "</div>" +
     '<div class="pl-prog" aria-hidden="true">' + segs + "</div>" +
     '<div class="pl-body"><div class="pl-in">' + saveErrHTML() + body + '</div></div><div class="pl-act"></div>' +
-    (st.kind === "end" || st.kind === "rend" ? "" : '<div class="pl-foot"><button data-pl="prev"' + (PL.i === 0 ? " disabled" : "") + ">" + FI('<path d="M15 5l-7 7 7 7"/>') + "Önceki</button>" +
+    (st.kind === "rend" ? "" : '<div class="pl-foot"><button data-pl="prev"' + (PL.i === 0 ? " disabled" : "") + ">" + FI('<path d="M15 5l-7 7 7 7"/>') + "Önceki</button>" + (st.kind === "end" ? "" : // seans sonunda yalnız Önceki: kapatıp açmadan bir adım geri dönülüp düzeltilebilir
       (st.kind === "ex" || st.kind === "str" ? '<button data-pl="how">' + FI('<circle cx="12" cy="12" r="10"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 4M12 17.5h.01"/>') + "Nasıl yapılır?</button>" : "") +
-      (st.k && altsOf(st.it.x, piOf(ctx(PL.date).ph.key)).length ? '<button data-pl="alt">' + FI('<path d="M4 8h14l-4-4M20 16H6l4 4"/>') + "Alternatif</button>" : "") + '<button data-pl="skip">' + FI('<path d="M9 5l7 7-7 7"/>') + "Atla</button></div>");
+      (st.k && altsOf(st.it.x, piOf(ctx(PL.date).ph.key), dayIds(PL.date)).length ? '<button data-pl="alt">' + FI('<path d="M4 8h14l-4-4M20 16H6l4 4"/>') + "Alternatif</button>" : "") + '<button data-pl="skip">' + FI('<path d="M9 5l7 7-7 7"/>') + "Atla</button>") + "</div>");
   // Sayaç halkası: .pl-timer içindeki büyük rakam ve durum etiketi halkanın ortasına alınır; dolum plRing() ile (her tikte)
   el.querySelectorAll(".pl-timer").forEach((t) => {
     const big = t.querySelector(".pl-big"); if (!big) return;

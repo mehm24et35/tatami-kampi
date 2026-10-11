@@ -715,7 +715,7 @@
   function loop(now) {
     const els = document.querySelectorAll("svg.an[data-x]");
     if (!els.length) { run = false; return; }
-    if (!(fr++ & 1)) els.forEach((el) => { const an = A[el.dataset.x]; if (an) el.innerHTML = body(an, (now / 1000 / an.T) % 1); });
+    if (!(fr++ & 1)) els.forEach((el) => { const an = A[el.dataset.x]; if (an && el.getClientRects().length) el.innerHTML = body(an, (now / 1000 / an.T) % 1); }); // görünmeyen (kısa ekranda gizlenen) figür çizilmez
     requestAnimationFrame(loop);
   }
   const still = (an) => (an.K && an.K.length > 1 ? (an.pp ? 0.5 : 1 / an.K.length) : 0.25);
