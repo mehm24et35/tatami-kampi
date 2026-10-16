@@ -1,5 +1,16 @@
 [
   {
+    "v": "2026-10-16",
+    "t": "Aynı hareket bir antrenmanda artık iki kez çıkmıyor; programın yeniden kuruldu",
+    "m": [
+      "Isınmadaki hareket ana blokta tekrar etmiyor (pogo, squat, dış rotasyon gibi). Programın bu kurala göre yeniden kuruldu; yaptığın günler ve kayıtların yerinde.",
+      "Isınma kardiyosu (ip, yürüyüş) kondisyon ya da soğumada yine çıkabilir: önce hafif ısınma, sonra iş.",
+      "Haftanın 7 gününü de seçersen 7. gün aerobik ve esneklik günü olur; önceden program kurulamıyordu.",
+      "15-20 dakikalık kısa günler artık seçtiğin süreye sığıyor: ısınma kısa, soğuma 2 dakika.",
+      "Yapay zekânla kurduğun programda aynı gün iki kez yazılan hareket uyarı verir."
+    ]
+  },
+  {
     "v": "2026-10-11",
     "t": "Küçük düzeltmeler: iPhone'da sayaç sesi, koyu temada açılış, daha akıcı arama",
     "m": [
