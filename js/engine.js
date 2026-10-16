@@ -3,7 +3,7 @@
 "use strict";
 const LIB = root.LIB || require("./lib.js");
 const EX = LIB.EX;
-const VERSION = 16; // değişince kayıtlı programlar cevaplardan yeniden üretilir
+const VERSION = 17; // değişince kayıtlı programlar cevaplardan yeniden üretilir
 
 const DAYS = [
   { k: "pzt", n: "Pazartesi", s: "Pzt" }, { k: "sal", n: "Salı", s: "Sal" }, { k: "car", n: "Çarşamba", s: "Çar" },
@@ -489,17 +489,21 @@ function sprintPlan(ex, P, pi) {
 }
 
 // ---------------- seans şablonları ----------------
-function warmup(type, P, pi) {
+// Isınma kardiyosu (ip, jumping jack, yerinde yürüyüş, yürüyüş) seansın kondisyon ya da soğuma maddesiyle aynı olabilir: önce hafif, sonra iş. Başka hiçbir hareket ısınmada ve ana blokta iki kez geçmez.
+const cardioOK = (ex) => ex.pat.includes("warm_cardio") || ex.pat.includes("z2");
+// skip: seansın ana bloklarındaki hareketler (ısınma onlardan sonra kurulur; aynı hareket iki kez çıkmaz, 2026-10-16)
+function warmup(type, P, pi, skip) {
   const items = [];
-  const add = (id, p) => { if (id && EX[id] && eqOK(EX[id], P) && injOK(EX[id], P) && (EX[id].imp || 0) <= P.imp[ph3(pi)] && prefOK(EX[id], P) && !P.avoid.has(id) && !items.some((i) => i.x === id)) { items.push({ x: id, p, t: "x", pri: 100 }); return true; } return false; };
+  const add = (id, p) => { if (id && EX[id] && eqOK(EX[id], P) && injOK(EX[id], P) && (EX[id].imp || 0) <= P.imp[ph3(pi)] && prefOK(EX[id], P) && !P.avoid.has(id) && !items.some((i) => i.x === id) && !(skip && skip.has(id) && !cardioOK(EX[id]))) { items.push({ x: id, p, t: "x", pri: 100 }); return true; } return false; };
   // Kardiyo: ip (varsa, darbe serbest, sessiz ortam değil) → makine → jumping jack → yerinde yürüyüş; "yürüyüş" tercihi makine yoksa yerinde yürüyüş
   const walk = P.cardioPref[0] === "walkint", hop = P.imp[0] >= 1 && !P.quiet;
   const cardio = P.eq.has("rope") && hop && type !== "z2flex" && !walk ? "ip" : P.eq.has("cardio") ? "bikeeasy" : hop && !walk ? "jj" : "march";
   if (type === "sprint") { add(P.eq.has("outdoor") ? "z2" : cardio, "5 dk hafif tempo"); add("bacaksal", "10/taraf"); add("askip", "2×15 m"); add("wall_drill", "2×5/bacak"); if (P.imp[ph3(pi)] >= 1) add("pogo", "2×15"); if (P.eq.has("outdoor")) add("stride", "2×30 m %60"); }
-  else if (type === "box") { add(cardio, "5 dk, farklı adımlar"); add("kedi", "8"); add("wgs", "3/taraf"); add("dislo", "10"); add("golge", "2×2 dk (hafif → orta)"); }
-  else if (type === "upper" || type === "cali") { add(cardio, "3 dk hafif"); add("bilek", "2 dk"); add("dislo", "10"); add(P.eq.has("band") ? "pullap" : "ytw", P.eq.has("band") ? "15" : "1 tur"); add(P.eq.has("pullbar") ? "scap" : "wallslide", P.eq.has("pullbar") ? "2×8" : "10"); add("dr", "12/taraf"); }
+  // Omuz çevirme (dislo) kardiyodan hemen sonra: 15-20 dk'lık günde ısınma 2 maddeye inse de omuz hazırlığı kalsın
+  else if (type === "box") { add(cardio, "5 dk, farklı adımlar"); add("dislo", "10"); add("kedi", "8"); add("wgs", "3/taraf"); add("golge", "2×2 dk (hafif → orta)"); }
+  else if (type === "upper" || type === "cali") { add(cardio, "3 dk hafif"); add("dislo", "10"); add("bilek", "2 dk"); add(P.eq.has("band") ? "pullap" : "ytw", P.eq.has("band") ? "15" : "1 tur"); add(P.eq.has("pullbar") ? "scap" : "wallslide", P.eq.has("pullbar") ? "2×8" : "10"); add("dr", "12/taraf"); }
   // Tüm vücut ve devre günlerinde itiş/çekiş de var: omuz hazırlığı (dislo) kısa ısınmada da kalsın diye öne
-  else if (type === "cond") { add(cardio, "3 dk hafif"); add("wgs", "3/taraf"); add("dislo", "10"); add("airsquat", "10 yavaş"); add("kedi", "8"); }
+  else if (type === "cond") { add(cardio, "3 dk hafif"); add("wgs", "3/taraf"); add("dislo", "10"); if (!add("airsquat", "10 yavaş")) add("bacaksal", "10/taraf"); add("kedi", "8"); } // squat devrede ise bacak hazırlığı bacak sallama
   else { add(cardio, "3 dk hafif"); add("wgs", "4/taraf"); if (type === "fb") add("dislo", "10"); add("bacaksal", "10/taraf"); add("airsquat", "10 yavaş"); add("gbridge", "10"); if (P.imp[ph3(pi)] >= 1) add("pogo", "2×10 hafif"); }
   // eklem sorunlarına özel hazırlık
   if (P.inj.wrist && (type === "upper" || type === "cali" || type === "box" || type === "fb")) add("bilek", "2 dk");
@@ -513,13 +517,13 @@ function warmup(type, P, pi) {
   const longer = (it, i) => (extra && i === 0 && /\d+ dk/.test(String(it.p)) ? Object.assign({}, it, { p: String(it.p).replace(/(\d+) dk/, (m, k) => +k + extra + " dk") + (P.asthma ? ", hafiften başla ve kademeli artır" : "") }) : it);
   if (P.mins <= 45) {
     const pre = items.filter((i) => ["tib", "balance", "birddog", "dr", "sideer", "pelvic"].includes(i.x) || (P.inj.wrist && i.x === "bilek")).sort((a, b) => (b.x === "pelvic") - (a.x === "pelvic")); // pelvik taban kısa ısınmada da kalır
-    const main = items.filter((i) => !pre.includes(i)).slice(0, P.mins <= 35 ? 3 : 4);
+    const main = items.filter((i) => !pre.includes(i)).slice(0, P.mins <= 20 && type !== "fb" && type !== "cond" ? 2 : P.mins <= 35 ? 3 : 4); // 15-20 dk: kardiyo + 1 hazırlık (tüm vücut / devre gününde omuz + bacak için 3)
     if (main[0]) main[0] = longer(Object.assign({}, main[0], { p: String(main[0].p).replace(/\d+ dk/, "2 dk") }), 0);
     return { name: "Isınma", warm: true, items: main.concat(pre.slice(0, P.postp ? 2 : 1)) };
   }
   return { name: "Isınma", warm: true, items: items.map(longer) };
 }
-const COOL = (P) => ({ name: "Soğuma", warm: true, items: [{ x: "z2", p: (P && P.mins <= 35 ? "3" : "5") + " dk yürüyüş + burundan nefes", t: "x", pri: 100 }] });
+const COOL = (P) => ({ name: "Soğuma", warm: true, items: [{ x: "z2", p: (P && P.mins <= 20 ? "2" : P && P.mins <= 35 ? "3" : "5") + " dk yürüyüş + burundan nefes", t: "x", pri: 100 }] });
 
 const FOCUS = {
   bacak: { n: "Bacak ve kalça", types: ["lower", "fb", "sprint"], pats: [["lunge"], ["quad_iso"], ["calf"]] },
@@ -527,7 +531,7 @@ const FOCUS = {
   sirt: { n: "Sırt", types: ["upper", "cali", "fb"], pats: [["hpull"], ["vpull"]] },
   kol: { n: "Kollar", types: ["upper", "cali", "fb"], pats: [["arm_flex"], ["arm_ext"]], alt: true }, // biceps/triceps dönüşümlü, aynı gün aynı kas iki kez yok
   karin: { n: "Karın ve gövde", types: ["lower", "upper", "cali", "fb", "box"], pats: [["core"], ["core_lat"]] },
-  // Duruş: arka omuz / kürek kemiği ve bel koruyucu hareketler (ısınmadakiler tekrar etmez: noWarm)
+  // Duruş: arka omuz / kürek kemiği ve bel koruyucu hareketler (ısınma bu bloktan sonra kurulur, aynı hareketi tekrar etmez)
   durus: { n: "Duruş", types: ["lower", "upper", "cali", "fb"], pats: [["prehab_sh"], ["prehab_back"]], only: { prehab_sh: ["facepull", "ytw", "pullap", "dr", "wallslide"], prehab_back: ["birddog", "deadbug", "sideplank"] } },
 };
 // Alet yoksa kalıp boş kalmasın: dikey çekiş yoksa yatay çekiş vb.
@@ -536,13 +540,12 @@ const FALLBACK = { vpull: "hpull", hpull: "vpull", vpush: "hpush" };
 // wants: { slotSıraNo: hareketId } — iki geçişli kurulumda (buildStable) eski plandaki hareketi o slotta tercih et; reserved: başka slotların istedikleri
 function buildSession(type, variant, P, pi, ord, wants) {
   const used = new Set();
-  const blocks = type === "z2flex" ? [] : [warmup(type, P, pi)]; // aerobik günde yürüyüşün kendisi ısınma
-  const warmIds = new Set(blocks[0] ? blocks[0].items.map((i) => i.x) : []);
+  const blocks = []; // ısınma en sonda, ana bloklardaki hareketleri bilerek kurulur (aynı hareket iki kez yok); aerobik günde yürüyüşün kendisi ısınma
   let sn = 0; // slot sıra numarası: şablon aynı olduğu sürece iki geçişte de aynı; çıktıdan generate sonunda silinir
   const reservedAll = wants ? new Set(Object.values(wants)) : null;
   const slot = (pat, kind, pri, o) => {
     const mySn = sn++;
-    o = Object.assign({}, o || {}); o.avoid = pat === "plyo" || o.noWarm ? new Set([...used, ...warmIds]) : used; // ısınmadaki sıçrama güç bloğunda (ve duruş bloğunda ısınma hareketi) tekrar etmez
+    o = Object.assign({}, o || {}); o.avoid = used; // seansta zaten olan hareket ikinci kez seçilmez
     if (wants) { if (wants[mySn]) o.want = wants[mySn]; o.reserved = new Set([...reservedAll].filter((x) => x !== wants[mySn])); }
     // Yeni döngüde yardımcı hareketler değişsin (ana kaldırışlar aynı kalır, ilerleme takip edilsin)
     if (P.cycle >= 2 && ["core", "core_lat", "lunge", "calf", "grip", "plyo"].includes(pat) && !o.only) o.rank = (o.rank || 0) + ((P.cycle - 1) % 2);
@@ -661,9 +664,10 @@ function buildSession(type, variant, P, pi, ord, wants) {
       blocks.forEach((b) => { if (!b.warm) b.items.forEach((it) => { if (pats.some((q) => EX[it.x].pat.includes(q))) it.pri = Math.max(it.pri, 8); }); });
       pats = ((ord || 0) % 2 ? pats.reverse() : pats).filter((q) => !own(q));
     }
-    const before = blocks.length; block("F · Öncelik: " + F.n, pats.slice(0, P.mins >= 60 ? 2 : 1).map((q) => [q, "acc", 8, F.only ? { only: F.only[q], noWarm: true } : undefined]));
+    const before = blocks.length; block("F · Öncelik: " + F.n, pats.slice(0, P.mins >= 60 ? 2 : 1).map((q) => [q, "acc", 8, F.only ? { only: F.only[q] } : undefined]));
     if (blocks.length > before) { const fb = blocks.pop(), ci = blocks.findIndex((b) => /Kondisyon/.test(b.name)); blocks.splice(ci < 0 ? blocks.length : ci, 0, fb); }
   }
+  if (type !== "z2flex") blocks.unshift(warmup(type, P, pi, used));
   if (type !== "z2flex" && type !== "sprint" && type !== "cond") blocks.push(COOL(P)); // kondisyon gününün C bloğu zaten soğuma yürüyüşü
   // Blok adı içindeki "circ" tipli maddeler için reçeteyi düzelt
   blocks.forEach((b) => b.items.forEach((it) => { if (Array.isArray(it.p) && it.p[0] && /tur ×/.test(it.p[0]) && EX[it.x].t === "s") it.p = it.p.map((s) => s.replace(/× (\d+)$/, "× $1 sn")); }));
@@ -756,11 +760,12 @@ function fitTime(s, P) {
     best.p = best.p.map((v) => String(v).replace(/^(\d+)(\s*(?:set\s*)?[×x])/, (m, a, rest) => Math.max(2, +a - 1) + rest));
     best.s = maxSets(best.p);
   }
-  // Son çare: ilk iki ana hareket kalacak şekilde en düşük öncelikli hareketi çıkar
+  // Son çare: ilk iki ana hareket (15-20 dk'lık günde ilk hareket) kalacak şekilde en düşük öncelikli hareketi çıkar
+  const keep = P.mins <= 20 ? 1 : 2;
   for (let guard = 0; guard < 10 && estMax(s) > limit; guard++) {
     const all = []; s.blocks.forEach((b) => { if (!b.warm) b.items.forEach((it) => all.push({ b, it })); });
-    if (all.length <= 2) break;
-    const last = all.slice(2).sort((a, b) => a.it.pri - b.it.pri)[0];
+    if (all.length <= keep) break;
+    const last = all.slice(keep).sort((a, b) => a.it.pri - b.it.pri)[0];
     if (last.b.circ) last.b.items = []; else last.b.items.splice(last.b.items.indexOf(last.it), 1);
     s.blocks = s.blocks.filter((b) => b.items.length);
   }
@@ -1091,6 +1096,9 @@ function aiCheck(v) {
       return Object.assign({ ad, hareketler }, isO(b) && aiWarm(Object.assign({}, b, { ad })) ? { isinma: true } : {});
     });
     if (!bloklar[0].isinma) bad(at + ": ilk blok ısınma olmalı (\"isinma\": true).");
+    const seenX = new Set(), dup = []; // aynı hareket aynı günde iki kez yok (ısınma kardiyosu hariç)
+    bloklar.forEach((b) => b.hareketler.forEach((h) => { if (seenX.has(h.id) && !(EX[h.id] && cardioOK(EX[h.id]))) dup.push(h.id); seenX.add(h.id); }));
+    if (dup.length) bad(at + ": \"" + uniq(dup).join("\", \"") + "\" aynı günde iki kez yazılmış; her hareket günde bir kez olsun (ısınma kardiyosu hariç).");
     gun[dk] = { baslik: txt(g.baslik, 60) || "Antrenman", bloklar };
   });
   const gunler = {}; DAYS.forEach((d) => { if (gun[d.k]) gunler[d.k] = gun[d.k]; });
@@ -1141,7 +1149,7 @@ function generate(A, opts) {
   const seq = split(P);
   const S = { H0: {}, F1: {}, T: {}, F2: {}, F3: {} };
   const dayType = {};
-  P.days.forEach((dk, i) => { dayType[dk] = seq[i]; });
+  P.days.forEach((dk, i) => { dayType[dk] = seq[i] || ["z2flex", 0]; }); // 7 gün seçilirse 7. gün aerobik + esneklik (düzen 6 gün; sihirbaz 7 güne izin veriyor, 2026-10-16 çöküş düzeltmesi)
   // eğer 6 günde aynı özel gün iki kez gelirse ikinciyi z2flex yap
   const seen = {};
   P.days.forEach((dk) => { const [t] = dayType[dk]; if (["box", "cond", "sprint", "z2flex"].includes(t)) { if (seen[t]) dayType[dk] = ["z2flex", 0]; seen[t] = 1; } });
